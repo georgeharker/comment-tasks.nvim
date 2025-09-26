@@ -1,22 +1,15 @@
 local M = {}
 
-M.config = nil
+M.config = {}
 
 local curl = require("plenary.curl")
 
-local function echo_message(message, hl_group)
-    hl_group = hl_group or "Normal"
-    vim.schedule(function()
-        vim.api.nvim_echo({ { message, hl_group } }, false, {})
-    end)
+local function create_command_handler(func)
+    return function(opts)
+        local lang_override = opts.args and opts.args ~= "" and opts.args or nil
+        func(lang_override)
+    end
 end
-
- local function create_command_handler(func)
-     return function(opts)
-         local lang_override = opts.args and opts.args ~= "" and opts.args or nil
-         func(lang_override)
-     end
- end
 
 -- Helper function to create language completion function
 local function create_language_completion()
@@ -29,30 +22,51 @@ local function create_language_completion()
     end
 end
 
-local function echo_info(message)
-    echo_message("ClickUp: " .. message, "Normal")
+-- Provider-agnostic notification functions
+local function notify_info(message, provider)
+    local title = provider and (provider:gsub("^%l", string.upper) .. " Tasks") or "Task Manager"
+    vim.notify(message, vim.log.levels.INFO, { title = title })
 end
 
-local function echo_progress(message)
-    echo_message("ClickUp: " .. message, "Comment")
+local function notify_success(message, provider)
+    local title = provider and (provider:gsub("^%l", string.upper) .. " Success") or "Task Manager"
+    vim.notify("✓ " .. message, vim.log.levels.INFO, { title = title })
 end
 
-local function echo_success(message)
-    echo_message("ClickUp: " .. message, "DiffAdd")
+local function notify_error(message, provider)
+    local title = provider and (provider:gsub("^%l", string.upper) .. " Error") or "Task Manager"
+    vim.notify("✗ " .. message, vim.log.levels.ERROR, { title = title })
 end
 
-local function echo_error(message)
-    echo_message("ClickUp Error: " .. message, "ErrorMsg")
+local function notify_warn(message, provider)
+    local title = provider and (provider:gsub("^%l", string.upper) .. " Warning") or "Task Manager"
+    vim.notify("⚠ " .. message, vim.log.levels.WARN, { title = title })
 end
 
-local function echo_warn(message)
-    echo_message("ClickUp Warning: " .. message, "WarningMsg")
-end
-
+-- Multi-provider configuration
 local config = {
-    api_key_env = "CLICKUP_API_KEY",
-    list_id = nil, -- Set this in setup()
-    team_id = nil, -- Set this in setup()
+    default_provider = "clickup",
+
+    providers = {
+        clickup = {
+            api_key_env = "CLICKUP_API_KEY",
+            list_id = nil,
+            team_id = nil,
+            enabled = true,
+        },
+        github = {
+            api_key_env = "GITHUB_TOKEN",
+            repo_owner = nil,
+            repo_name = nil,
+            enabled = false,
+        },
+        todoist = {
+            api_key_env = "TODOIST_API_TOKEN",
+            project_id = nil,
+            enabled = false,
+        },
+    },
+
     comment_prefixes = {
         "TODO",
         "FIXME",
@@ -74,6 +88,7 @@ local config = {
         "REFACTOR",
         "CLEANUP",
     },
+
     -- Language configurations for Tree-sitter based comment detection
     languages = {
         python = {
@@ -278,6 +293,24 @@ local config = {
     -- Fallback to regex patterns if Tree-sitter is unavailable
     fallback_to_regex = true,
 }
+
+-- Language support functions
+
+-- Function to check if current buffer language is supported
+local function is_supported_language(lang_override)
+    local lang = lang_override or vim.bo.filetype
+    return config.languages[lang] ~= nil
+end
+
+-- Helper function to check language support and notify if unsupported
+local function check_language_supported(lang_override, provider)
+    if not is_supported_language(lang_override) then
+        local lang = lang_override or vim.bo.filetype
+        notify_warn("Language '" .. lang .. "' is not supported", provider)
+        return false
+    end
+    return true
+end
 
 -- Tree-sitter based comment detection functions
 
@@ -712,13 +745,38 @@ local function extend_comment_with_url(comment_info, task_url)
         local end_line_1based = comment_info.end_line
         local end_line_0based = end_line_1based - 1
 
+        -- Check if this is a single-line block comment
+        local is_single_line = (comment_info.start_line == comment_info.end_line)
+
+        if is_single_line then
+            -- Single-line block comment: insert URL before closing marker on same line
+            local line = vim.api.nvim_buf_get_lines(0, end_line_0based, end_line_0based + 1, false)[1]
+
+            -- Find the closing marker(s) and insert URL before them
+            local modified_line = line
+            for _, end_marker in ipairs(style_config.end_markers) do
+                local marker_pos = modified_line:find(end_marker, 1, true)
+                if marker_pos then
+                    -- Insert URL before the closing marker
+                    local before_marker = modified_line:sub(1, marker_pos - 1)
+                    local after_marker = modified_line:sub(marker_pos)
+                    modified_line = before_marker .. " " .. task_url .. " " .. after_marker
+                    break
+                end
+            end
+
+            -- Replace the line
+            vim.api.nvim_buf_set_lines(0, end_line_0based, end_line_0based + 1, false, { modified_line })
+            return true
+        end
+
         -- Get the configured continuation pattern for this language/style
         local continuation = style_config.continue_with or ""
 
         -- Create URL line with language-specific continuation pattern
         local url_line = continuation .. task_url
 
-        -- Insert URL line before the end marker line
+        -- Multi-line block comment: Insert URL line before the end marker line
         vim.api.nvim_buf_set_lines(0, end_line_0based, end_line_0based, false, { url_line })
 
         return true
@@ -744,15 +802,42 @@ local function extend_comment_with_url(comment_info, task_url)
     return false
 end
 
+-- URL extraction functions
+
+-- Function to extract ClickUp task URL from comment
+local function extract_clickup_url(line)
+    local url = line:match("(https://app%.clickup%.com/t/[%w%-]+)")
+    return url
+end
+
+-- Function to extract GitHub issue URL from comment
+local function extract_github_url(line)
+    local url = line:match("(https://github%.com/[%w%-_%.]+/[%w%-_%.]+/issues/[0-9]+)")
+    return url
+end
+
+-- Function to extract Todoist task URL from comment
+local function extract_todoist_url(line)
+    local url = line:match("(https://todoist%.com/showTask%?id=[0-9]+)")
+    return url
+end
+
+-- Generic function to extract any supported task URL
+local function extract_task_url(line)
+    return extract_clickup_url(line) or
+           extract_github_url(line) or
+           extract_todoist_url(line)
+end
+
 -- Function to check if comment already contains ClickUp URL (generalized)
 local function comment_has_url(comment_info)
     if not comment_info or not comment_info.is_comment then
         return false
     end
 
-    -- Check all lines for URL
+    -- Check all lines for any task URL
     for _, line in ipairs(comment_info.lines) do
-        if line:match("https://app%.clickup%.com/t/") then
+        if extract_task_url(line) then
             return true
         end
     end
@@ -762,9 +847,9 @@ end
 
 -- Function to get task details with custom fields
 local function get_task_with_custom_fields(task_id, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
@@ -807,11 +892,482 @@ local function get_task_with_custom_fields(task_id, callback)
     })
 end
 
+-- GitHub API Functions
+
+local function create_github_issue(task_name, filename, callback)
+    local api_key = vim.fn.getenv(config.providers.github.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "GitHub API key not found in environment variable: " .. config.providers.github.api_key_env)
+        return
+    end
+
+    if not config.providers.github.repo_owner or not config.providers.github.repo_name then
+        callback(nil, "GitHub repo_owner and repo_name not configured")
+        return
+    end
+
+    -- Prepare issue data
+    local body = "Created from Neovim comment"
+    if filename and filename ~= "" and filename ~= "[Unnamed Buffer]" then
+        body = body .. " in " .. filename .. "\n\n**Source Files:**\n- " .. filename
+    end
+
+    local issue_data = {
+        title = task_name,
+        body = body,
+        labels = {"task", "from-neovim"}
+    }
+
+    local json_data = vim.fn.json_encode(issue_data)
+    local api_url = "https://api.github.com/repos/" ..
+                   config.providers.github.repo_owner .. "/" ..
+                   config.providers.github.repo_name .. "/issues"
+
+    curl.request({
+        url = api_url,
+        method = "post",
+        headers = {
+            accept = "application/vnd.github+json",
+            Authorization = "Bearer " .. api_key,
+            ["Content-Type"] = "application/json",
+            ["X-GitHub-Api-Version"] = "2022-11-28",
+        },
+        body = json_data,
+        callback = function(result)
+            vim.schedule(function()
+                if result.status ~= 201 then
+                    callback(
+                        nil,
+                        "GitHub API request failed with status: "
+                            .. result.status
+                            .. " - "
+                            .. (result.body or "Unknown error")
+                    )
+                    return
+                end
+
+                local success, response = pcall(vim.fn.json_decode, result.body)
+                if not success then
+                    callback(nil, "Failed to parse JSON response")
+                    return
+                end
+
+                if response.html_url then
+                    callback(response.html_url, nil)
+                else
+                    callback(nil, "No issue URL in response")
+                end
+            end)
+        end,
+    })
+end
+
+local function update_github_issue_status(issue_number, is_closed, callback)
+    local api_key = vim.fn.getenv(config.providers.github.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "GitHub API key not found in environment variable: " .. config.providers.github.api_key_env)
+        return
+    end
+
+    if not config.providers.github.repo_owner or not config.providers.github.repo_name then
+        callback(nil, "GitHub repo_owner and repo_name not configured")
+        return
+    end
+
+    local issue_data = {
+        state = is_closed and "closed" or "open"
+    }
+
+    local json_data = vim.fn.json_encode(issue_data)
+    local api_url = "https://api.github.com/repos/" ..
+                   config.providers.github.repo_owner .. "/" ..
+                   config.providers.github.repo_name .. "/issues/" .. issue_number
+
+    curl.request({
+        url = api_url,
+        method = "patch",
+        headers = {
+            accept = "application/vnd.github+json",
+            Authorization = "Bearer " .. api_key,
+            ["Content-Type"] = "application/json",
+            ["X-GitHub-Api-Version"] = "2022-11-28",
+        },
+        body = json_data,
+        callback = function(result)
+            vim.schedule(function()
+                if result.status ~= 200 then
+                    callback(
+                        nil,
+                        "GitHub API request failed with status: "
+                            .. result.status
+                            .. " - "
+                            .. (result.body or "Unknown error")
+                    )
+                    return
+                end
+
+                local success, _response = pcall(vim.fn.json_decode, result.body)
+                if not success then
+                    callback(nil, "Failed to parse JSON response")
+                    return
+                end
+
+                callback(true, nil)
+            end)
+        end,
+    })
+end
+
+local function add_files_to_github_issue(issue_number, files, callback)
+    local api_key = vim.fn.getenv(config.providers.github.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "GitHub API key not found in environment variable: " .. config.providers.github.api_key_env)
+        return
+    end
+
+    if not config.providers.github.repo_owner or not config.providers.github.repo_name then
+        callback(nil, "GitHub repo_owner and repo_name not configured")
+        return
+    end
+
+    -- Get current issue to append to existing body
+    local get_url = "https://api.github.com/repos/" ..
+                   config.providers.github.repo_owner .. "/" ..
+                   config.providers.github.repo_name .. "/issues/" .. issue_number
+
+    curl.request({
+        url = get_url,
+        method = "get",
+        headers = {
+            accept = "application/vnd.github+json",
+            Authorization = "Bearer " .. api_key,
+            ["X-GitHub-Api-Version"] = "2022-11-28",
+        },
+        callback = function(get_result)
+            vim.schedule(function()
+                if get_result.status ~= 200 then
+                    callback(nil, "Failed to get current issue")
+                    return
+                end
+
+                local success, issue = pcall(vim.fn.json_decode, get_result.body)
+                if not success then
+                    callback(nil, "Failed to parse issue JSON")
+                    return
+                end
+
+                -- Append files to issue body
+                local updated_body = issue.body or ""
+                local files_section = "\n\n**Source Files:**\n"
+                for _, file in ipairs(files) do
+                    files_section = files_section .. "- " .. file .. "\n"
+                end
+
+                -- Check if files section already exists and update/append accordingly
+                if updated_body:match("%*%*Source Files:%*%*") then
+                    -- Replace existing files section
+                    updated_body = updated_body:gsub("\n%*%*Source Files:%*%*.-\n", files_section)
+                else
+                    -- Append new files section
+                    updated_body = updated_body .. files_section
+                end
+
+                local update_data = { body = updated_body }
+                local json_data = vim.fn.json_encode(update_data)
+
+                curl.request({
+                    url = get_url,
+                    method = "patch",
+                    headers = {
+                        accept = "application/vnd.github+json",
+                        Authorization = "Bearer " .. api_key,
+                        ["Content-Type"] = "application/json",
+                        ["X-GitHub-Api-Version"] = "2022-11-28",
+                    },
+                    body = json_data,
+                    callback = function(update_result)
+                        vim.schedule(function()
+                            if update_result.status ~= 200 then
+                                callback(nil, "Failed to update issue with files")
+                                return
+                            end
+                            callback(true, nil)
+                        end)
+                    end,
+                })
+            end)
+        end,
+    })
+end
+
+-- Todoist API Functions
+
+local function create_todoist_task(task_name, filename, callback)
+    local api_key = vim.fn.getenv(config.providers.todoist.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "Todoist API key not found in environment variable: " .. config.providers.todoist.api_key_env)
+        return
+    end
+
+    -- Prepare task data
+    local content = task_name
+    local description = "Created from Neovim comment"
+    if filename and filename ~= "" and filename ~= "[Unnamed Buffer]" then
+        description = description .. " in " .. filename .. "\n\nSource Files:\n- " .. filename
+    end
+
+    local task_data = {
+        content = content,
+        description = description
+    }
+
+    if config.providers.todoist.project_id then
+        task_data.project_id = config.providers.todoist.project_id
+    end
+
+    local json_data = vim.fn.json_encode(task_data)
+    local api_url = "https://api.todoist.com/rest/v2/tasks"
+
+    curl.request({
+        url = api_url,
+        method = "post",
+        headers = {
+            Authorization = "Bearer " .. api_key,
+            ["Content-Type"] = "application/json",
+        },
+        body = json_data,
+        callback = function(result)
+            vim.schedule(function()
+                if result.status ~= 200 then
+                    callback(
+                        nil,
+                        "Todoist API request failed with status: "
+                            .. result.status
+                            .. " - "
+                            .. (result.body or "Unknown error")
+                    )
+                    return
+                end
+
+                local success, response = pcall(vim.fn.json_decode, result.body)
+                if not success then
+                    callback(nil, "Failed to parse JSON response")
+                    return
+                end
+
+                if response.id then
+                    local task_url = "https://todoist.com/showTask?id=" .. response.id
+                    callback(task_url, nil)
+                else
+                    callback(nil, "No task ID in response")
+                end
+            end)
+        end,
+    })
+end
+
+local function close_todoist_task(task_id, callback)
+    local api_key = vim.fn.getenv(config.providers.todoist.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "Todoist API key not found in environment variable: " .. config.providers.todoist.api_key_env)
+        return
+    end
+
+    local api_url = "https://api.todoist.com/rest/v2/tasks/" .. task_id .. "/close"
+
+    curl.request({
+        url = api_url,
+        method = "post",
+        headers = {
+            Authorization = "Bearer " .. api_key,
+        },
+        callback = function(result)
+            vim.schedule(function()
+                if result.status ~= 204 then
+                    callback(
+                        nil,
+                        "Todoist API request failed with status: "
+                            .. result.status
+                            .. " - "
+                            .. (result.body or "Unknown error")
+                    )
+                    return
+                end
+
+                callback(true, nil)
+            end)
+        end,
+    })
+end
+
+local function add_files_to_todoist_task(task_id, files, callback)
+    local api_key = vim.fn.getenv(config.providers.todoist.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "Todoist API key not found in environment variable: " .. config.providers.todoist.api_key_env)
+        return
+    end
+
+    -- Get current task to append to existing description
+    local get_url = "https://api.todoist.com/rest/v2/tasks/" .. task_id
+
+    curl.request({
+        url = get_url,
+        method = "get",
+        headers = {
+            Authorization = "Bearer " .. api_key,
+        },
+        callback = function(get_result)
+            vim.schedule(function()
+                if get_result.status ~= 200 then
+                    callback(nil, "Failed to get current task")
+                    return
+                end
+
+                local success, task = pcall(vim.fn.json_decode, get_result.body)
+                if not success then
+                    callback(nil, "Failed to parse task JSON")
+                    return
+                end
+
+                -- Append files to task description
+                local updated_description = task.description or ""
+                local files_section = "\n\nSource Files:\n"
+                for _, file in ipairs(files) do
+                    files_section = files_section .. "- " .. file .. "\n"
+                end
+
+                -- Check if files section already exists and update/append accordingly
+                if updated_description:match("Source Files:") then
+                    -- Replace existing files section
+                    updated_description = updated_description:gsub("\nSource Files:.-$", files_section)
+                else
+                    -- Append new files section
+                    updated_description = updated_description .. files_section
+                end
+
+                local update_data = { description = updated_description }
+                local json_data = vim.fn.json_encode(update_data)
+
+                curl.request({
+                    url = get_url,
+                    method = "post",
+                    headers = {
+                        Authorization = "Bearer " .. api_key,
+                        ["Content-Type"] = "application/json",
+                    },
+                    body = json_data,
+                    callback = function(update_result)
+                        vim.schedule(function()
+                            if update_result.status ~= 200 then
+                                callback(nil, "Failed to update task with files")
+                                return
+                            end
+                            callback(true, nil)
+                        end)
+                    end,
+                })
+            end)
+        end,
+    })
+end
+
+-- ClickUp API Functions (status updates)
+
+local function update_clickup_task_status(task_id, status, callback)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
+    if not api_key or api_key == vim.NIL then
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
+        return
+    end
+
+    -- Prepare API request data
+    local task_data = {
+        status = status,
+    }
+
+    local json_data = vim.fn.json_encode(task_data)
+    local api_url = "https://api.clickup.com/api/v2/task/" .. task_id
+
+    -- Execute API request using plenary curl
+    curl.request({
+        url = api_url,
+        method = "put",
+        headers = {
+            accept = "application/json",
+            Authorization = api_key,
+            ["Content-Type"] = "application/json",
+        },
+        body = json_data,
+        callback = function(result)
+            vim.schedule(function()
+                if result.status ~= 200 then
+                    callback(
+                        nil,
+                        "API request failed with status: "
+                            .. result.status
+                            .. " - "
+                            .. (result.body or "Unknown error")
+                    )
+                    return
+                end
+
+                local success, response = pcall(vim.fn.json_decode, result.body)
+                if not success then
+                    callback(nil, "Failed to parse JSON response")
+                    return
+                end
+
+                if response.err then
+                    callback(nil, "ClickUp API error: " .. response.err)
+                    return
+                end
+
+                callback(true, nil)
+            end)
+        end,
+    })
+end
+
+-- Generic task status update functions
+
+local function update_task_status_generic(task_identifier, provider, status, callback)
+    if provider == "clickup" then
+        update_clickup_task_status(task_identifier, status, callback)
+    elseif provider == "github" then
+        -- GitHub only supports open/closed
+        local is_closed = (status == "complete" or status == "closed")
+        update_github_issue_status(task_identifier, is_closed, callback)
+    elseif provider == "todoist" then
+        -- Todoist only supports close operation
+        if status == "complete" or status == "closed" then
+            close_todoist_task(task_identifier, callback)
+        else
+            callback(nil, "Todoist only supports closing tasks")
+        end
+    else
+        callback(nil, "Unsupported provider: " .. provider)
+    end
+end
+
+local function add_file_to_task_generic(task_identifier, provider, filename, callback)
+    if provider == "clickup" then
+        -- For ClickUp, we need to get and update the SourceFiles custom field
+        -- This is handled in the existing add_file_to_task_sources function
+        callback(nil, "Use add_file_to_task_sources for ClickUp")
+    elseif provider == "github" then
+        add_files_to_github_issue(task_identifier, {filename}, callback)
+    elseif provider == "todoist" then
+        add_files_to_todoist_task(task_identifier, {filename}, callback)
+    else
+        callback(nil, "Unsupported provider: " .. provider)
+    end
+end
+
 -- Alternative function to set custom field using dedicated endpoint
 local function set_custom_field_value(task_id, field_id, field_value, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
@@ -862,9 +1418,9 @@ end
 
 -- Helper function to update custom field by ID
 local function update_custom_field_by_id(task_id, field_id, field_value, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
@@ -977,13 +1533,13 @@ local function update_task_custom_field(task_id, field_name, field_value, callba
 end
 
 local function create_clickup_task(task_name, filename, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
-    if not config.list_id then
+    if not config.providers.clickup.list_id then
         callback(nil, "ClickUp list_id not configured")
         return
     end
@@ -1001,7 +1557,7 @@ local function create_clickup_task(task_name, filename, callback)
     }
 
     local json_data = vim.fn.json_encode(task_data)
-    local api_url = "https://api.clickup.com/api/v2/list/" .. config.list_id .. "/task"
+    local api_url = "https://api.clickup.com/api/v2/list/" .. config.providers.clickup.list_id .. "/task"
 
     -- Execute API request using plenary curl
     curl.request({
@@ -1070,20 +1626,20 @@ end
 
 -- Function to get all tasks in a team with custom fields
 local function get_team_tasks_with_custom_fields(callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
-    if not config.list_id then
+    if not config.providers.clickup.list_id then
         callback(nil, "ClickUp list_id not configured")
         return
     end
 
     -- Use list endpoint to get tasks with custom fields
     local api_url = "https://api.clickup.com/api/v2/list/"
-        .. config.list_id
+        .. config.providers.clickup.list_id
         .. "/task?include_closed=true"
 
     curl.request({
@@ -1124,9 +1680,9 @@ local function get_team_tasks_with_custom_fields(callback)
 end
 
 local function update_task_description(task_id, description, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
+    local api_key = vim.fn.getenv(config.providers.clickup.api_key_env)
     if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
+        callback(nil, "ClickUp API key not found in environment variable: " .. config.providers.clickup.api_key_env)
         return
     end
 
@@ -1538,7 +2094,7 @@ local function search_task_url(task_url, callback)
     ripgrep_search_task_url(task_url, function(files, error)
         if error then
             -- If ripgrep failed, try fallback method
-            echo_progress("Ripgrep failed, using fallback search method")
+            notify_info("Ripgrep failed, using fallback search method", "clickup")
             fallback_search_task_url(task_url, callback)
         else
             callback(files, nil)
@@ -1558,28 +2114,28 @@ function M.clear_xref_results()
                 vim.bo[existing_buf].modifiable = true
                 vim.api.nvim_buf_set_lines(existing_buf, 0, -1, false, {})
                 vim.bo[existing_buf].modifiable = false
-                echo_info("XRef results cleared")
+                notify_info("XRef results cleared", "clickup")
                 return
             end
         end
     end
 
-    echo_warn("No XRef results buffer found to clear")
+    notify_warn("No XRef results buffer found to clear", "clickup")
 end
 
 function M.cleanup_sourcefiles()
-    echo_info(
+    notify_info(
         "Cleaning up SourceFiles across all tasks (removing duplicates, .venv references, etc.)..."
-    )
+        , "clickup")
 
     get_team_tasks_with_custom_fields(function(tasks, error)
         if error then
-            echo_error("Error fetching tasks: " .. error)
+            notify_error("Error fetching tasks: " .. error, "clickup")
             return
         end
 
         if not tasks or #tasks == 0 then
-            echo_warn("No tasks found in team")
+            notify_warn("No tasks found in team", "clickup")
             return
         end
 
@@ -1597,11 +2153,11 @@ function M.cleanup_sourcefiles()
 
                 -- Only update if there are actual changes
                 if new_source_files_value ~= existing_source_files then
-                    echo_progress(
+                    notify_info(
                         "Cleaning SourceFiles for: "
                             .. task.name:sub(1, 40)
                             .. (task.name:len() > 40 and "..." or "")
-                    )
+                        , "clickup")
 
                     update_task_custom_field(
                         task.id,
@@ -1612,54 +2168,54 @@ function M.cleanup_sourcefiles()
 
                             if update_error then
                                 failed_count = failed_count + 1
-                                echo_warn(
+                                notify_warn(
                                     "Failed to clean SourceFiles for: "
                                         .. task.name:sub(1, 30)
                                         .. " - "
                                         .. update_error
-                                )
+                                    , "clickup")
                             else
                                 updated_count = updated_count + 1
-                                echo_success(
+                                notify_success(
                                     "Cleaned SourceFiles for: "
                                         .. task.name:sub(1, 30)
                                         .. (task.name:len() > 30 and "..." or "")
-                                )
+                                    , "clickup")
                             end
 
                             if processed >= total_tasks then
-                                echo_success(
+                                notify_success(
                                     "SourceFiles cleanup completed: "
                                         .. updated_count
                                         .. " updated, "
                                         .. failed_count
                                         .. " failed"
-                                )
+                                    , "clickup")
                             end
                         end
                     )
                 else
                     processed = processed + 1
                     if processed >= total_tasks then
-                        echo_success(
+                        notify_success(
                             "SourceFiles cleanup completed: "
                                 .. updated_count
                                 .. " updated, "
                                 .. failed_count
                                 .. " failed"
-                        )
+                            , "clickup")
                     end
                 end
             else
                 processed = processed + 1
                 if processed >= total_tasks then
-                    echo_success(
+                    notify_success(
                         "SourceFiles cleanup completed: "
                             .. updated_count
                             .. " updated, "
                             .. failed_count
                             .. " failed"
-                    )
+                        , "clickup")
                 end
             end
         end
@@ -1667,16 +2223,16 @@ function M.cleanup_sourcefiles()
 end
 
 function M.clickup_task_xref()
-    echo_info("Fetching ClickUp tasks...")
+    notify_info("Fetching ClickUp tasks...", "clickup")
 
     get_team_tasks_with_custom_fields(function(tasks, error)
         if error then
-            echo_error("Error fetching tasks: " .. error)
+            notify_error("Error fetching tasks: " .. error, "clickup")
             return
         end
 
         if not tasks or #tasks == 0 then
-            echo_warn("No tasks found in team")
+            notify_warn("No tasks found in team", "clickup")
             return
         end
 
@@ -1701,15 +2257,15 @@ function M.clickup_task_xref()
             end
         end
 
-        echo_info(
+        notify_info(
             string.format(
                 "Processing %d tasks (including tasks with file references in description but no SourceFiles field)...",
                 #bugs_without_refs
             )
-        )
+            , "clickup")
 
         if #bugs_without_refs == 0 then
-            echo_warn("No tasks to process")
+            notify_warn("No tasks to process", "clickup")
             return
         end
 
@@ -1731,9 +2287,9 @@ function M.clickup_task_xref()
             local task_url = "https://app.clickup.com/t/" .. task.id
             -- Show progress every 10th task or at start to reduce noise but keep user informed
             if (processed + 1) % 10 == 0 or processed == 0 then
-                echo_progress(
+                notify_info(
                     string.format("Progress: %d/%d tasks processed", processed + 1, total_tasks)
-                )
+                    , "clickup")
             end
 
             -- Combined search: first search for URL, then for files mentioned in description
@@ -1793,13 +2349,13 @@ function M.clickup_task_xref()
                     check_completion()
                 elseif files and #files > 0 then
                     -- Show file findings for significant discoveries
-                    echo_progress(
+                    notify_info(
                         "Found "
                             .. #files
                             .. " file(s) for: "
                             .. task.name:sub(1, 50)
                             .. (task.name:len() > 50 and "..." or "")
-                    )
+                        , "clickup")
 
                     -- Get existing SourceFiles and merge with new findings
                     local existing_source_files =
@@ -1821,11 +2377,11 @@ function M.clickup_task_xref()
                     -- Only update if there are actually changes
                     local existing_value = get_source_files_value(task) or ""
                     if source_files_value == existing_value then
-                        echo_info(
+                        notify_info(
                             "No changes needed for SourceFiles: "
                                 .. task.name:sub(1, 40)
                                 .. (task.name:len() > 40 and "..." or "")
-                        )
+                            , "clickup")
 
                         -- Still need to check description updates for desc_files
                         if
@@ -1838,28 +2394,28 @@ function M.clickup_task_xref()
                                 strip_filenames_from_description(task.description, desc_files)
 
                             if updated_description ~= task.description then
-                                echo_progress(
+                                notify_info(
                                     "Updating description for: "
                                         .. task.name:sub(1, 40)
                                         .. (task.name:len() > 40 and "..." or "")
-                                )
+                                    , "clickup")
                                 update_task_description(
                                     task.id,
                                     updated_description,
                                     function(desc_success, desc_error)
                                         if desc_error then
-                                            echo_warn(
+                                            notify_warn(
                                                 "Failed to update description for: "
                                                     .. task.name:sub(1, 30)
                                                     .. " - "
                                                     .. desc_error
-                                            )
+                                                , "clickup")
                                         else
-                                            echo_success(
+                                            notify_success(
                                                 "Updated description for: "
                                                     .. task.name:sub(1, 30)
                                                     .. (task.name:len() > 30 and "..." or "")
-                                            )
+                                                , "clickup")
                                         end
 
                                         table.insert(updated_bugs, {
@@ -1908,46 +2464,46 @@ function M.clickup_task_xref()
 
                                 -- Only update description if it actually changed
                                 if updated_description ~= task.description then
-                                    echo_progress(
+                                    notify_info(
                                         "Description before: "
                                             .. task.description:sub(1, 100)
                                             .. (task.description:len() > 100 and "..." or "")
-                                    )
-                                    echo_progress(
+                                        , "clickup")
+                                    notify_info(
                                         "Description after: "
                                             .. updated_description:sub(1, 100)
                                             .. (updated_description:len() > 100 and "..." or "")
-                                    )
-                                    echo_progress(
+                                        , "clickup")
+                                    notify_info(
                                         "Updating description for: "
                                             .. task.name:sub(1, 40)
                                             .. (task.name:len() > 40 and "..." or "")
-                                    )
+                                        , "clickup")
                                     update_task_description(
                                         task.id,
                                         updated_description,
                                         function(desc_success, desc_error)
                                             if desc_error then
-                                                echo_warn(
+                                                notify_warn(
                                                     "Failed to update description for: "
                                                         .. task.name:sub(1, 30)
                                                         .. " - "
                                                         .. desc_error
-                                                )
+                                                    , "clickup")
                                             else
-                                                echo_success(
+                                                notify_success(
                                                     "Updated description for: "
                                                         .. task.name:sub(1, 30)
                                                         .. (task.name:len() > 30 and "..." or "")
-                                                )
+                                                    , "clickup")
                                             end
 
                                             -- Record success regardless of description update result
-                                            echo_success(
+                                            notify_success(
                                                 "Updated SourceFiles for: "
                                                     .. task.name:sub(1, 40)
                                                     .. (task.name:len() > 40 and "..." or "")
-                                            )
+                                                , "clickup")
                                             table.insert(updated_bugs, {
                                                 url = task_url,
                                                 name = task.name,
@@ -1964,11 +2520,11 @@ function M.clickup_task_xref()
                             end
 
                             -- No description update needed, just record SourceFiles success
-                            echo_success(
+                            notify_success(
                                 "Updated SourceFiles for: "
                                     .. task.name:sub(1, 40)
                                     .. (task.name:len() > 40 and "..." or "")
-                            )
+                                , "clickup")
                             table.insert(updated_bugs, {
                                 url = task_url,
                                 name = task.name,
@@ -2162,31 +2718,25 @@ function M.display_xref_results(updated_bugs, failed_updates, no_refs_found)
     ]])
 
     -- Notify about completion
-    echo_success(
+    notify_success(
         string.format(
             "Cross-reference complete: %d updated, %d failed, %d no references",
             #updated_bugs,
             #failed_updates,
             #no_refs_found
         )
-    )
-end
-
--- Function to extract ClickUp task URL from comment
-local function extract_clickup_url(line)
-    local url = line:match("(https://app%.clickup%.com/t/[%w%-]+)")
-    return url
+        , "clickup")
 end
 
 -- Generalized function to extract ClickUp task URL from comment
-local function extract_clickup_url_from_comment(comment_info)
+local function extract_task_url_from_comment(comment_info)
     if not comment_info or not comment_info.is_comment then
         return nil
     end
 
-    -- Check all lines for URL (not just last line)
+    -- Check all lines for any task URL (not just last line)
     for _, line in ipairs(comment_info.lines) do
-        local url = extract_clickup_url(line)
+        local url = extract_task_url(line)
         if url then
             return url
         end
@@ -2203,94 +2753,118 @@ local function extract_task_id(url)
     return task_id
 end
 
--- Function to update ClickUp task status
-local function update_clickup_task_status(task_id, status, callback)
-    local api_key = vim.fn.getenv(config.api_key_env)
-    if not api_key or api_key == vim.NIL then
-        callback(nil, "ClickUp API key not found in environment variable: " .. config.api_key_env)
-        return
+-- Function to extract GitHub issue number from URL
+local function extract_github_issue_number(url)
+    if not url then
+        return nil
     end
-
-    -- Prepare API request data
-    local task_data = {
-        status = status,
-    }
-
-    local json_data = vim.fn.json_encode(task_data)
-    local api_url = "https://api.clickup.com/api/v2/task/" .. task_id
-
-    -- Execute API request using plenary curl
-    curl.request({
-        url = api_url,
-        method = "put",
-        headers = {
-            accept = "application/json",
-            Authorization = api_key,
-            ["Content-Type"] = "application/json",
-        },
-        body = json_data,
-        callback = function(result)
-            vim.schedule(function()
-                if result.status ~= 200 then
-                    callback(
-                        nil,
-                        "API request failed with status: "
-                            .. result.status
-                            .. " - "
-                            .. (result.body or "Unknown error")
-                    )
-                    return
-                end
-
-                local success, response = pcall(vim.fn.json_decode, result.body)
-                if not success then
-                    callback(nil, "Failed to parse JSON response")
-                    return
-                end
-
-                if response.err then
-                    callback(nil, "ClickUp API error: " .. response.err)
-                    return
-                end
-
-                callback(true, nil)
-            end)
-        end,
-    })
+    local issue_number = url:match("https://github%.com/[%w%-_%.]+/[%w%-_%.]+/issues/([0-9]+)")
+    return issue_number
 end
 
-local function show_task_dialog_for_block(initial_text, comment_info, filename)
+-- Function to extract Todoist task ID from URL
+local function extract_todoist_task_id(url)
+    if not url then
+        return nil
+    end
+    local task_id = url:match("https://todoist%.com/showTask%?id=([0-9]+)")
+    return task_id
+end
+
+-- Function to determine provider from URL
+local function get_provider_from_url(url)
+    if not url then
+        return nil
+    end
+
+    if url:match("https://app%.clickup%.com/t/") then
+        return "clickup"
+    elseif url:match("https://github%.com/") then
+        return "github"
+    elseif url:match("https://todoist%.com/showTask") then
+        return "todoist"
+    end
+
+    return nil
+end
+
+-- Generic function to extract task identifier from URL
+local function extract_task_identifier(url)
+    local provider = get_provider_from_url(url)
+    if not provider then
+        return nil, nil
+    end
+
+    if provider == "clickup" then
+        return extract_task_id(url), provider
+    elseif provider == "github" then
+        return extract_github_issue_number(url), provider
+    elseif provider == "todoist" then
+        return extract_todoist_task_id(url), provider
+    end
+
+    return nil, provider
+end
+
+-- Generic task creation functions
+
+local function create_task_with_provider(provider, task_name, filename, callback)
+    if provider == "clickup" then
+        create_clickup_task(task_name, filename, callback)
+    elseif provider == "github" then
+        create_github_issue(task_name, filename, callback)
+    elseif provider == "todoist" then
+        create_todoist_task(task_name, filename, callback)
+    else
+        callback(nil, "Unsupported provider: " .. provider)
+    end
+end
+
+local function show_task_dialog_for_block(initial_text, comment_info, filename, provider)
+    provider = provider or config.default_provider
     vim.ui.input({
         prompt = "Task name: ",
         default = initial_text,
         completion = nil,
     }, function(input)
         if not input or input == "" then
-            print("Task creation cancelled")
+            notify_info("Task creation cancelled", provider)
             return
         end
 
-        print("Creating ClickUp task...")
+        notify_info("Creating task...", provider)
 
-        create_clickup_task(input, filename, function(task_url, error)
+        create_task_with_provider(provider, input, filename, function(task_url, error)
             if error then
-                vim.notify("Error creating task: " .. error, vim.log.levels.ERROR)
+                notify_error("Error creating task: " .. error, provider)
                 return
             end
 
             if task_url then
                 local success = extend_comment_with_url(comment_info, task_url)
                 if success then
-                    vim.notify("Task created: " .. task_url, vim.log.levels.INFO)
+                    notify_success("Task created: " .. task_url, provider)
                 else
-                    vim.notify("Error updating comment with task URL", vim.log.levels.ERROR)
+                    notify_error("Error updating comment with task URL", provider)
                 end
             end
         end)
     end)
 end
 
-function M.create_task_from_comment(lang_override)
+function M.create_task_from_comment(lang_override, provider)
+    provider = provider or config.default_provider
+
+    if not check_language_supported(lang_override, provider) then
+        return
+    end
+
+    -- Check if provider is enabled
+    if not config.providers[provider] or not config.providers[provider].enabled then
+        notify_error("Provider " .. provider .. " is not enabled")
+        return
+    end
+
     -- Get current buffer filename
     local filename = vim.fn.expand("%:t") -- Get just the filename without path
     if filename == "" then
@@ -2303,7 +2877,7 @@ function M.create_task_from_comment(lang_override)
 
     if not comment_info then
         local lang = lang_override or vim.bo.filetype
-        vim.notify("No comment found on current line for language: " .. lang, vim.log.levels.WARN)
+        notify_warn("No comment found on current line for language: " .. lang)
         return
     end
 
@@ -2311,116 +2885,96 @@ function M.create_task_from_comment(lang_override)
     local comment_content = extract_comment_content_generic(comment_info)
 
     if comment_content == "" then
-        vim.notify("Comment is empty", vim.log.levels.WARN)
+        notify_warn("Comment is empty", provider)
         return
     end
 
     -- Check if URL already exists in comment
     if comment_has_url(comment_info) then
-        vim.notify("Comment already contains a ClickUp task URL", vim.log.levels.WARN)
+        notify_warn("Comment already contains a task URL", provider)
         return
     end
 
-    show_task_dialog_for_block(comment_content, comment_info, filename)
-end
-
--- Function to check if current buffer language is supported
-local function is_supported_language(lang_override)
-    local lang = lang_override or vim.bo.filetype
-    return config.languages[lang] ~= nil
-end
--- Safe version with filetype check
-function M.create_task_from_comment_safe(lang_override)
-    if not is_supported_language(lang_override) then
-        local lang = lang_override or vim.bo.filetype
-        vim.notify("Language '" .. lang .. "' is not supported", vim.log.levels.WARN)
-        return
-    end
-
-    M.create_task_from_comment(lang_override)
+    show_task_dialog_for_block(comment_content, comment_info, filename, provider)
 end
 
 function M.update_task_status_from_comment(status, action_name, lang_override)
+    if not check_language_supported(lang_override) then
+        return
+    end
+
     -- Try to find a comment using generalized detection
     local comment_info = get_comment_info(lang_override)
 
     if not comment_info then
         local lang = lang_override or vim.bo.filetype
-        vim.notify("No comment found on current line for language: " .. lang, vim.log.levels.WARN)
+        notify_warn("No comment found on current line for language: " .. lang)
         return
     end
 
-    -- Extract ClickUp URL from comment
-    local task_url = extract_clickup_url_from_comment(comment_info)
+    -- Extract task URL from comment
+    local task_url = extract_task_url_from_comment(comment_info)
     if not task_url then
-        vim.notify("No ClickUp task URL found in comment", vim.log.levels.WARN)
+        notify_warn("No task URL found in comment")
         return
     end
 
-    -- Extract task ID from URL
-    local task_id = extract_task_id(task_url)
-    if not task_id then
-        vim.notify("Could not extract task ID from URL", vim.log.levels.ERROR)
+    -- Extract task identifier and provider from URL
+    local task_identifier, provider = extract_task_identifier(task_url)
+    if not task_identifier then
+        notify_error("Could not extract task identifier from URL")
         return
     end
 
-    print((action_name or "Updating") .. " ClickUp task: " .. task_id)
+    notify_info((action_name or "Updating") .. " task: " .. task_identifier, provider)
 
-    -- Update task status
-    update_clickup_task_status(task_id, status, function(success, error)
+    -- Update task status using appropriate provider
+    update_task_status_generic(task_identifier, provider, status, function(success, error)
         if error then
-            vim.notify("Error updating task: " .. error, vim.log.levels.ERROR)
+            notify_error("Error updating task: " .. error, provider)
             return
         end
 
         if success then
-            vim.notify(
-                "Task updated successfully (" .. status .. "): " .. task_url,
-                vim.log.levels.INFO
-            )
+            notify_success("Task updated successfully (" .. status .. "): " .. task_url, provider)
         end
     end)
 end
 
-function M.update_task_status_from_comment_safe(status, action_name, lang_override)
-    if not is_supported_language(lang_override) then
-        local lang = lang_override or vim.bo.filetype
-        vim.notify("Language '" .. lang .. "' is not supported", vim.log.levels.WARN)
-        return
-    end
+-- Provider-specific task creation functions
+function M.create_clickup_task_from_comment(lang_override)
+    M.create_task_from_comment(lang_override, "clickup")
+end
 
-    M.update_task_status_from_comment(status, action_name, lang_override)
+function M.create_github_task_from_comment(lang_override)
+    M.create_task_from_comment(lang_override, "github")
+end
+
+function M.create_todoist_task_from_comment(lang_override)
+    M.create_task_from_comment(lang_override, "todoist")
 end
 
 function M.close_task_from_comment(lang_override)
     M.update_task_status_from_comment("complete", "Closing", lang_override)
 end
 
-function M.close_task_from_comment_safe(lang_override)
-    M.update_task_status_from_comment_safe("complete", "Closing", lang_override)
-end
-
 function M.review_task_from_comment(lang_override)
     M.update_task_status_from_comment("review", "Setting to review", lang_override)
-end
-
-function M.review_task_from_comment_safe(lang_override)
-    M.update_task_status_from_comment_safe("review", "Setting to review", lang_override)
 end
 
 function M.in_progress_task_from_comment(lang_override)
     M.update_task_status_from_comment("in progress", "Setting to in progress", lang_override)
 end
 
-function M.in_progress_task_from_comment_safe(lang_override)
-    M.update_task_status_from_comment_safe("in progress", "Setting to in progress", lang_override)
-end
-
 function M.add_file_to_task_sources(lang_override)
+    if not check_language_supported(lang_override) then
+        return
+    end
+
     -- Get current buffer filename
     local filename = vim.fn.expand("%:t") -- Get just the filename without path
     if filename == "" or filename == "[Unnamed Buffer]" then
-        vim.notify("No valid filename to add", vim.log.levels.WARN)
+        notify_warn("No valid filename to add")
         return
     end
 
@@ -2429,88 +2983,99 @@ function M.add_file_to_task_sources(lang_override)
 
     if not comment_info then
         local lang = lang_override or vim.bo.filetype
-        vim.notify("No comment found on current line for language: " .. lang, vim.log.levels.WARN)
+        notify_warn("No comment found on current line for language: " .. lang)
         return
     end
 
-    -- Extract ClickUp URL from comment
-    local task_url = extract_clickup_url_from_comment(comment_info)
+    -- Extract task URL from comment
+    local task_url = extract_task_url_from_comment(comment_info)
     if not task_url then
-        vim.notify("No ClickUp task URL found in comment", vim.log.levels.WARN)
+        notify_warn("No task URL found in comment")
         return
     end
 
-    -- Extract task ID from URL
-    local task_id = extract_task_id(task_url)
-    if not task_id then
-        vim.notify("Could not extract task ID from URL", vim.log.levels.ERROR)
+    -- Extract task identifier and provider from URL
+    local task_identifier, provider = extract_task_identifier(task_url)
+    if not task_identifier then
+        notify_error("Could not extract task identifier from URL")
         return
     end
 
-    print("Adding " .. filename .. " to SourceFiles for task: " .. task_id)
+    notify_info("Adding " .. filename .. " to task: " .. task_identifier, provider)
 
-    -- Get current task details to check existing SourceFiles
-    get_task_with_custom_fields(task_id, function(task_data, get_error)
-        if get_error then
-            vim.notify("Error fetching task: " .. get_error, vim.log.levels.ERROR)
-            return
-        end
-
-        -- Get existing SourceFiles value
-        local current_source_files = get_source_files_value(task_data)
-        local files_list = {}
-
-        -- Parse existing files
-        if current_source_files and current_source_files ~= "" then
-            for file in current_source_files:gmatch("[^\r\n]+") do
-                table.insert(files_list, file)
+    if provider == "clickup" then
+        -- ClickUp-specific handling with SourceFiles custom field
+        get_task_with_custom_fields(task_identifier, function(task_data, get_error)
+            if get_error then
+                notify_error("Error fetching task: " .. get_error, "clickup")
+                return
             end
-        end
 
-        -- Check if filename is already in the list
-        local already_exists = false
-        for _, existing_file in ipairs(files_list) do
-            if existing_file == filename then
-                already_exists = true
-                break
-            end
-        end
+            -- Get existing SourceFiles value
+            local current_source_files = get_source_files_value(task_data)
+            local files_list = {}
 
-        if already_exists then
-            vim.notify("File " .. filename .. " already exists in SourceFiles", vim.log.levels.INFO)
-            return
-        end
-
-        -- Add the new filename
-        table.insert(files_list, filename)
-        local updated_source_files = table.concat(files_list, "\n")
-
-        -- Update the custom field
-        update_task_custom_field(
-            task_id,
-            "SourceFiles",
-            updated_source_files,
-            function(success, update_error)
-                if update_error then
-                    vim.notify("Error updating SourceFiles: " .. update_error, vim.log.levels.ERROR)
-                    return
-                end
-
-                if success then
-                    vim.notify(
-                        "Successfully added " .. filename .. " to SourceFiles: " .. task_url,
-                        vim.log.levels.INFO
-                    )
+            -- Parse existing files
+            if current_source_files and current_source_files ~= "" then
+                for file in current_source_files:gmatch("[^\r\n]+") do
+                    table.insert(files_list, file)
                 end
             end
-        )
-    end)
+
+            -- Check if filename is already in the list
+            local already_exists = false
+            for _, existing_file in ipairs(files_list) do
+                if existing_file == filename then
+                    already_exists = true
+                    break
+                end
+            end
+
+            if already_exists then
+                notify_info("File " .. filename .. " already exists in SourceFiles", "clickup")
+                return
+            end
+
+            -- Add the new filename
+            table.insert(files_list, filename)
+            local updated_source_files = table.concat(files_list, "\n")
+
+            -- Update the custom field
+            update_task_custom_field(
+                task_identifier,
+                "SourceFiles",
+                updated_source_files,
+                function(success, update_error)
+                    if update_error then
+                        notify_error("Error updating SourceFiles: " .. update_error, "clickup")
+                        return
+                    end
+
+                    if success then
+                        notify_success("Successfully added " .. filename .. " to SourceFiles: " .. task_url, "clickup")
+                    end
+                end
+            )
+        end)
+    else
+        -- For GitHub and Todoist, add to structured text
+        add_file_to_task_generic(task_identifier, provider, filename, function(success, error)
+            if error then
+                notify_error("Error adding file to task: " .. error, provider)
+                return
+            end
+
+            if success then
+                notify_success("Successfully added " .. filename .. " to task: " .. task_url, provider)
+            end
+        end)
+    end
 end
 
-function M.add_file_to_task_sources_safe(lang_override)
-    if not is_supported_language(lang_override) then
-        local lang = lang_override or vim.bo.filetype
-        vim.notify("Language '" .. lang .. "' is not supported", vim.log.levels.WARN)
+-- Legacy ClickUp-specific function for backward compatibility
+function M.add_file_to_clickup_task_sources(lang_override)
+    -- This will only work if the comment contains a ClickUp URL
+    if not check_language_supported(lang_override, "clickup") then
         return
     end
 
@@ -2520,17 +3085,37 @@ end
 function M.setup(opts)
     opts = opts or {}
 
-    -- Configure ClickUp settings
+    -- Set default provider
+    if opts.default_provider then
+        config.default_provider = opts.default_provider
+    end
+
+    -- Configure providers
+    if opts.providers then
+        for provider_name, provider_opts in pairs(opts.providers) do
+            if config.providers[provider_name] then
+                -- Merge provider configuration
+                for key, value in pairs(provider_opts) do
+                    config.providers[provider_name][key] = value
+                end
+            else
+                -- Add new provider
+                config.providers[provider_name] = provider_opts
+            end
+        end
+    end
+
+    -- Legacy ClickUp configuration for backward compatibility
     if opts.list_id then
-        config.list_id = opts.list_id
+        config.providers.clickup.list_id = opts.list_id
     end
 
     if opts.team_id then
-        config.team_id = opts.team_id
+        config.providers.clickup.team_id = opts.team_id
     end
 
     if opts.api_key_env then
-        config.api_key_env = opts.api_key_env
+        config.providers.clickup.api_key_env = opts.api_key_env
     end
 
     -- Configure comment prefixes
@@ -2560,37 +3145,70 @@ function M.setup(opts)
     end
 
     -- Validate configuration
-    if not config.list_id then
-        vim.notify("Warning: ClickUp list_id not configured", vim.log.levels.WARN)
+    local enabled_providers = {}
+    for provider_name, provider_config in pairs(config.providers) do
+        if provider_config.enabled then
+            table.insert(enabled_providers, provider_name)
+        end
+    end
+
+    if #enabled_providers == 0 then
+        notify_warn("No providers are enabled")
+    else
+        -- notify_info("Enabled providers: " .. table.concat(enabled_providers, ", "))
+    end
+
+    -- Validate specific provider configurations
+    if config.providers.clickup.enabled and not config.providers.clickup.list_id then
+        notify_warn("ClickUp provider enabled but list_id not configured", "clickup")
+    end
+
+    if config.providers.github.enabled and (not config.providers.github.repo_owner or not config.providers.github.repo_name) then
+        notify_warn("GitHub provider enabled but repo_owner/repo_name not configured", "github")
     end
 
     -- Create user commands
+
+    -- Multi-provider commands (use default provider)
     vim.api.nvim_create_user_command(
-        "ClickUpTask",
-        create_command_handler(M.create_task_from_comment_safe),
+        "TaskCreate",
+        create_command_handler(M.create_task_from_comment),
         {
-            desc = "Create ClickUp task from comment (optional language arg)",
+            desc = "Create task from comment using default provider (optional language arg)",
             nargs = "?", -- Optional argument
             complete = create_language_completion()
     })
 
-    vim.api.nvim_create_user_command("ClickUpTaskForce", create_command_handler(M.create_task_from_comment), {
-        desc = "Create ClickUp task (ignore language validation, optional language arg)",
+    vim.api.nvim_create_user_command("TaskClose", create_command_handler(M.close_task_from_comment), {
+        desc = "Close task from comment (optional language arg)",
         nargs = "?",
         complete = create_language_completion(),
     })
 
-    vim.api.nvim_create_user_command("ClickUpClose", create_command_handler(M.close_task_from_comment_safe), {
+    vim.api.nvim_create_user_command("TaskAddFile", create_command_handler(M.add_file_to_task_sources), {
+        desc = "Add current file to task from comment (optional language arg)",
+        nargs = "?",
+        complete = create_language_completion(),
+    })
+
+    -- Provider-specific commands
+
+    -- ClickUp commands (backward compatibility)
+    vim.api.nvim_create_user_command(
+        "ClickUpTask",
+        create_command_handler(M.create_clickup_task_from_comment),
+        {
+            desc = "Create ClickUp task from comment (optional language arg)",
+            nargs = "?",
+            complete = create_language_completion()
+    })
+
+    vim.api.nvim_create_user_command("ClickUpClose", create_command_handler(M.close_task_from_comment), {
         desc = "Close ClickUp task from comment (optional language arg)",
         nargs = "?",
         complete = create_language_completion(),
     })
 
-    vim.api.nvim_create_user_command("ClickUpCloseForce", create_command_handler(M.close_task_from_comment), {
-        desc = "Close ClickUp task (ignore language validation, optional language arg)",
-        nargs = "?",
-        complete = create_language_completion(),
-    })
 
     vim.api.nvim_create_user_command("ClickUpReview", create_command_handler(M.review_task_from_comment_safe), {
         desc = "Set ClickUp task to review from comment (optional language arg)",
@@ -2598,11 +3216,6 @@ function M.setup(opts)
         complete = create_language_completion(),
     })
 
-    vim.api.nvim_create_user_command("ClickUpReviewForce", create_command_handler(M.review_task_from_comment), {
-        desc = "Set ClickUp task to review (ignore language validation, optional language arg)",
-        nargs = "?",
-        complete = create_language_completion(),
-    })
 
     vim.api.nvim_create_user_command("ClickUpInProgress", create_command_handler(M.in_progress_task_from_comment_safe), {
         desc = "Set ClickUp task to in progress from comment (optional language arg)",
@@ -2610,11 +3223,6 @@ function M.setup(opts)
         complete = create_language_completion(),
     })
 
-    vim.api.nvim_create_user_command("ClickUpInProgressForce", create_command_handler(M.in_progress_task_from_comment), {
-        desc = "Set ClickUp task to in progress (ignore language validation, optional language arg)",
-        nargs = "?",
-        complete = create_language_completion(),
-    })
 
     vim.api.nvim_create_user_command("ClickupTaskXref", function()
         M.clickup_task_xref()
@@ -2630,11 +3238,35 @@ function M.setup(opts)
         complete = create_language_completion(),
     })
 
-    vim.api.nvim_create_user_command("ClickUpAddFileForce", create_command_handler(M.add_file_to_task_sources), {
-        desc = "Add current file to SourceFiles (ignore language validation, optional language arg)",
+
+    -- GitHub commands
+    vim.api.nvim_create_user_command("GitHubTask", create_command_handler(M.create_github_task_from_comment), {
+        desc = "Create GitHub issue from comment (optional language arg)",
         nargs = "?",
         complete = create_language_completion(),
     })
+
+    -- Todoist commands
+    vim.api.nvim_create_user_command("TodoistTask", create_command_handler(M.create_todoist_task_from_comment), {
+        desc = "Create Todoist task from comment (optional language arg)",
+        nargs = "?",
+        complete = create_language_completion(),
+    })
+
+
+    vim.api.nvim_create_user_command("GitHubClose", create_command_handler(M.close_task_from_comment_safe), {
+        desc = "Close GitHub issue from comment (optional language arg)",
+        nargs = "?",
+        complete = create_language_completion(),
+    })
+
+
+    vim.api.nvim_create_user_command("TodoistClose", create_command_handler(M.close_task_from_comment_safe), {
+        desc = "Close Todoist task from comment (optional language arg)",
+        nargs = "?",
+        complete = create_language_completion(),
+    })
+
 
     vim.api.nvim_create_user_command("ClickUpCleanupSourceFiles", function()
         M.cleanup_sourcefiles()
@@ -2647,7 +3279,7 @@ function M.setup(opts)
         vim.keymap.set("n", opts.keymap, function()
             M.create_task_from_comment_safe()
         end, {
-            desc = "Create ClickUp task from comment",
+            desc = "Create task from comment (default provider)",
         })
     end
 end
