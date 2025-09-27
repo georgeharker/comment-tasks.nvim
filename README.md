@@ -1,10 +1,12 @@
 # Comment Tasks
 
-A Neovim plugin that integrates multiple task management systems (ClickUp, GitHub Issues, Todoist) with code comments across multiple programming languages. Create, update, and manage tasks directly from your comments without leaving your editor.
+> **⚠️ BREAKING CHANGE**: The command structure has been updated to use explicit subcommands. `ClickUpTask python` no longer works - use `ClickUpTask new python`. See the [Migration Guide](#migration-guide) for full details.
+
+A Neovim plugin that integrates multiple task management systems (ClickUp, GitHub Issues, Todoist, GitLab Issues) with code comments across multiple programming languages. Create, update, and manage tasks directly from your comments without leaving your editor.
 
 ## Features
 
-- **Multi-Provider Support**: Works with ClickUp, GitHub Issues, and Todoist
+- **Multi-Provider Support**: Works with ClickUp, GitHub Issues, Todoist, and GitLab Issues
 - **Multi-Language Support**: Works with 15+ programming languages using Tree-sitter
 - **Create Tasks from Comments**: Convert code comments into tasks across different platforms
 - **Smart Comment Detection**: Handles single-line, block comments, and docstrings
@@ -16,6 +18,14 @@ A Neovim plugin that integrates multiple task management systems (ClickUp, GitHu
 - **Language Override**: Force specific language detection when needed
 - **Automatic Fallback**: Uses regex patterns when Tree-sitter unavailable
 - **Bulk Operations**: Clean up and deduplicate SourceFiles across all tasks (ClickUp)
+- **Modular Architecture**: Extensible provider system for easy addition of new task management platforms
+
+## Supported Task Management Systems
+
+- **ClickUp** - Full-featured with custom fields, status updates, and cross-referencing
+- **GitHub Issues** - Create and manage issues with structured descriptions  
+- **Todoist** - Create and complete tasks with file references
+- **GitLab Issues** - Create and manage issues with labels and structured descriptions (supports both gitlab.com and self-hosted)
 
 ## Supported Languages
 
@@ -49,7 +59,7 @@ The plugin supports comment detection across multiple programming languages:
   },
   config = function()
     require("comment-tasks").setup({
-      default_provider = "clickup", -- Default: "clickup", options: "github", "todoist"
+      default_provider = "clickup", -- Default: "clickup", options: "github", "todoist", "gitlab"
       
       providers = {
         clickup = {
@@ -70,6 +80,13 @@ The plugin supports comment detection across multiple programming languages:
           enabled = false, -- Enable if you want to use Todoist
           api_key_env = "TODOIST_API_TOKEN",
           project_id = "your_project_id", -- Optional
+        },
+        
+        gitlab = {
+          enabled = true,
+          api_key_env = "GITLAB_TOKEN",
+          project_id = "12345", -- Numeric project ID
+          gitlab_url = "https://gitlab.com", -- Optional: for self-hosted GitLab
         },
       },
       
@@ -103,12 +120,20 @@ export TODOIST_API_TOKEN="your_todoist_api_token"
 ```
 Get your token from: https://todoist.com/prefs/integrations
 
+### GitLab
+```bash
+export GITLAB_TOKEN="your_gitlab_personal_access_token"
+```
+Create a token at: GitLab Settings > Access Tokens
+Required scopes: `api` (for full API access)
+Note: `project_id` should be the numeric project ID, not the project name
+
 ## Configuration Options
 
 ```lua
 require("comment-tasks").setup({
   -- Default provider when using generic commands
-  default_provider = "clickup", -- "clickup" | "github" | "todoist"
+  default_provider = "clickup", -- "clickup" | "github" | "todoist" | "gitlab"
   
   providers = {
     clickup = {
@@ -129,6 +154,13 @@ require("comment-tasks").setup({
       enabled = true,                   -- Enable Todoist integration
       api_key_env = "TODOIST_API_TOKEN", -- Environment variable name  
       project_id = "project_id",        -- Optional: Specific project
+    },
+    
+    gitlab = {
+      enabled = true,                   -- Enable GitLab integration
+      api_key_env = "GITLAB_TOKEN",     -- Environment variable name
+      project_id = "12345",             -- Required: Numeric project ID
+      gitlab_url = "https://gitlab.com", -- Optional: for self-hosted GitLab
     },
   },
   
@@ -167,19 +199,30 @@ require("comment-tasks").setup({
 #### Provider-Specific Commands
 ```vim
 " ClickUp
-:ClickUpTask        " Create ClickUp task
-:ClickUpClose       " Close ClickUp task  
-:ClickUpReview      " Set ClickUp task to review
-:ClickUpInProgress  " Set ClickUp task to in progress
-:ClickUpAddFile     " Add file to ClickUp task SourceFiles
+:ClickUpTask         " Create ClickUp task (default: new)
+:ClickUpTask new     " Create ClickUp task
+:ClickUpTask close   " Close ClickUp task
+:ClickUpTask review  " Set ClickUp task to review
+:ClickUpTask progress " Set ClickUp task to in progress
+:ClickUpTask addfile " Add file to ClickUp task SourceFiles
 
 " GitHub
-:GitHubTask         " Create GitHub issue
-:GitHubClose        " Close GitHub issue
+:GitHubTask         " Create GitHub issue (default: new)
+:GitHubTask new     " Create GitHub issue
+:GitHubTask close   " Close GitHub issue
+:GitHubTask addfile " Add file to GitHub issue
 
 " Todoist  
-:TodoistTask        " Create Todoist task
-:TodoistClose       " Close Todoist task
+:TodoistTask        " Create Todoist task (default: new)
+:TodoistTask new    " Create Todoist task
+:TodoistTask close  " Close Todoist task
+:TodoistTask addfile " Add file to Todoist task
+
+" GitLab
+:GitLabTask         " Create GitLab issue (default: new)
+:GitLabTask new     " Create GitLab issue
+:GitLabTask close   " Close GitLab issue
+:GitLabTask addfile " Add file to GitLab issue
 ```
 
 #### ClickUp-Specific Bulk Operations
@@ -206,41 +249,11 @@ After running `:TaskCreate`, the URL will be added to your comment:
 # https://app.clickup.com/t/abc123
 ```
 
-**Single-line block comments** (C/C++/Java/CSS) get URLs inserted on the same line:
-
-```c
-/* TODO: write this function */
-```
-
-Becomes:
-
-```c
-/* TODO: write this function https://app.clickup.com/t/abc123 */
-```
-
-**Multi-line block comments** get URLs inserted as new lines:
-
-```c
-/*
- * TODO: write this function
- * Need to handle error cases
- */
-```
-
-Becomes:
-
-```c
-/*
- * TODO: write this function
- * Need to handle error cases
- * https://app.clickup.com/t/abc123
- */
-```
-
 Different providers will add their respective URL formats:
 - **ClickUp**: `https://app.clickup.com/t/task_id`
 - **GitHub**: `https://github.com/owner/repo/issues/123`
 - **Todoist**: `https://todoist.com/showTask?id=task_id`
+- **GitLab**: `https://gitlab.com/owner/project/-/issues/123`
 
 ### Task Status Management
 
@@ -248,7 +261,7 @@ For existing tasks (with URLs in comments), you can update status:
 
 ```vim
 :TaskClose           " Close task (all providers)
-                     " Works with ClickUp, GitHub, and Todoist URLs
+                     " Works with ClickUp, GitHub, Todoist, and GitLab URLs
 :ClickUpReview       " Set ClickUp task to review (ClickUp only)  
 :ClickUpInProgress   " Set ClickUp task to in progress (ClickUp only)
 ```
@@ -257,19 +270,7 @@ For existing tasks (with URLs in comments), you can update status:
 - **ClickUp**: Full status management (complete, in progress, review, etc.)
 - **GitHub**: Open/Close issues (maps "complete"/"closed" to "closed" state)
 - **Todoist**: Close tasks (maps "complete"/"closed" to task completion)
-
-**Example Usage:**
-```python
-# TODO: Fix authentication bug
-# https://github.com/user/repo/issues/123
-```
-Running `:TaskClose` or `:GitHubClose` will close GitHub issue #123.
-
-```python
-# FIXME: Handle edge case  
-# https://todoist.com/showTask?id=456789
-```
-Running `:TaskClose` or `:TodoistClose` will mark Todoist task as complete.
+- **GitLab**: Close/Reopen issues with label support for advanced statuses
 
 ### File Reference Management
 
@@ -284,6 +285,7 @@ Add the current file to a task's file references:
 - **ClickUp**: Updates the SourceFiles custom field
 - **GitHub**: Adds/updates a "Source Files" section in the issue body
 - **Todoist**: Adds/updates a "Source Files" section in the task description
+- **GitLab**: Adds/updates a "Source Files" section in the issue description
 
 ## Advanced Usage
 
@@ -292,8 +294,10 @@ Add the current file to a task's file references:
 Force specific language detection when the filetype detection is incorrect:
 
 ```vim
-:TaskCreate python   " Force Python comment detection
-:GitHubTask rust     " Force Rust comment detection for GitHub
+:TaskCreate python     " Force Python comment detection
+:GitHubTask new rust   " Force Rust comment detection for GitHub
+:GitLabTask new lua    " Force Lua comment detection for GitLab
+:ClickUpTask close python " Close task with Python detection override
 ```
 
 ### Custom Keybindings
@@ -317,6 +321,10 @@ vim.keymap.set("n", "<leader>tct", function()
        require("comment-tasks").create_todoist_task_from_comment()
 end, { desc = "Create Todoist task" })
 
+vim.keymap.set("n", "<leader>tcl", function()
+       require("comment-tasks").create_gitlab_task_from_comment()
+end, { desc = "Create GitLab issue" })
+
 vim.keymap.set("n", "<leader>tx", function()
        require("comment-tasks").close_task_from_comment()
 end, { desc = "Close task" })
@@ -337,6 +345,32 @@ This command will:
 4. Clean up task descriptions by removing filename references
 5. Display results in a dedicated buffer
 
+## Architecture
+
+The plugin uses a modular architecture with:
+
+- **Generic Provider Interface** - Standardized API for all task management systems
+- **Core Modules** - Comment detection, configuration management, utilities
+- **Provider Modules** - Isolated implementations for each task management system
+- **Extensible Design** - Easy to add new providers following the interface
+
+### File Structure
+```
+lua/comment-tasks/
+├── init.lua                 # Main plugin entry point
+├── providers/
+│   ├── interface.lua        # Generic provider interface
+│   ├── clickup.lua         # ClickUp provider
+│   ├── github.lua          # GitHub provider
+│   ├── todoist.lua         # Todoist provider
+│   └── gitlab.lua          # GitLab provider
+├── core/
+│   ├── detection.lua       # Comment detection logic
+│   ├── config.lua          # Configuration management
+│   └── utils.lua           # Common utilities
+└── tests/                  # Test suite
+```
+
 ## Backward Compatibility
 
 All existing ClickUp-focused commands and configurations continue to work. The plugin maintains full backward compatibility while adding multi-provider support.
@@ -355,7 +389,6 @@ require("comment-tasks").setup({
 ### Main Functions
 
 - `create_task_from_comment(lang_override, provider)` - Create task with specific provider
-- `create_task_from_comment_safe(lang_override, provider)` - Same with language validation
 - `close_task_from_comment(lang_override)` - Close any task type
 - `add_file_to_task_sources(lang_override)` - Add file to task references
 
@@ -364,6 +397,7 @@ require("comment-tasks").setup({
 - `create_clickup_task_from_comment(lang_override)` 
 - `create_github_task_from_comment(lang_override)`
 - `create_todoist_task_from_comment(lang_override)`
+- `create_gitlab_task_from_comment(lang_override)`
 
 ### ClickUp-Specific Functions
 
@@ -380,11 +414,84 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 To add support for a new task management system:
 
-1. Add provider configuration to the `config.providers` table
-2. Implement provider-specific API functions (`create_*`, `update_*`, `add_files_to_*`)
-3. Add URL extraction and task ID parsing functions
-4. Update the generic functions to handle the new provider
-5. Add provider-specific commands and documentation
+1. Create a new provider file in `lua/comment-tasks/providers/`
+2. Extend the base `Provider` class from `providers/interface.lua`
+3. Implement all required methods (`create_task`, `update_task_status`, etc.)
+4. Register the provider: `interface.register_provider("name", ProviderClass)`
+5. Add configuration to `core/config.lua`
+6. Add URL extraction patterns to `core/utils.lua`
+7. Add provider-specific commands to the main plugin
+8. Update documentation
+
+The modular architecture makes it easy to add new providers while maintaining consistency across the plugin.
+
+## Testing
+
+The plugin includes a comprehensive test suite that covers:
+
+- Comment detection across all supported languages
+- Provider interface compliance
+- Mock API interactions for all providers
+- Configuration validation
+- Error handling and edge cases
+
+Run tests with:
+```vim
+:lua require("comment-tasks.tests").run_all()
+```
+
+## Migration Guide
+
+### Command Structure Changes
+
+The plugin has moved to a cleaner subcommand-based structure for better organization and intuitive usage.
+
+#### Before (Deprecated)
+```vim
+:ClickUpTask           " Create task (optional language arg)
+:ClickUpTask python    " Create task with Python language override
+:ClickUpClose          " Close task
+:ClickUpReview         " Set to review
+:ClickUpInProgress     " Set to in progress
+:ClickUpAddFile        " Add file to task
+
+" Similar pattern for other providers
+:GitHubTask
+:GitHubClose
+```
+
+#### After (New Structure)
+```vim
+:ClickUpTask           " Create task (defaults to 'new')
+:ClickUpTask new       " Create task explicitly
+:ClickUpTask new python " Create task with Python language override
+:ClickUpTask close     " Close task
+:ClickUpTask review    " Set to review
+:ClickUpTask progress  " Set to in progress (renamed from 'InProgress')
+:ClickUpTask addfile   " Add file to task
+
+" Consistent pattern for all providers
+:GitHubTask new
+:GitHubTask close
+:TodoistTask new
+:TodoistTask close
+:GitLabTask new
+:GitLabTask close
+```
+
+#### Backward Compatibility
+- **Legacy commands removed**: `ClickUpClose`, `ClickUpReview`, etc. have been removed for a cleaner codebase
+- **Language-only arguments removed**: `ClickUpTask python` no longer works - use `ClickUpTask new python`
+- **Action required**: Update to new subcommand structure
+
+#### Migration Steps
+1. **Update your commands** to use the new subcommand structure (required)
+2. **Update keybindings** if you prefer the new structure
+3. **Update documentation** and scripts to reference new commands
+4. **Replace legacy commands**: Change `ClickUpClose` to `ClickUpTask close`, etc.
+5. **Replace language-only usage**: Change `ClickUpTask python` to `ClickUpTask new python`
+
+All legacy commands have been removed for a cleaner, more maintainable codebase.
 
 ## License
 
@@ -395,7 +502,7 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 If you encounter issues:
 
 1. Check that your API keys are correctly set in environment variables
-2. Verify provider configuration (list_id, repo_owner/repo_name, etc.)  
+2. Verify provider configuration (list_id, repo_owner/repo_name, project_id, etc.)  
 3. Ensure the comment is in a supported format and language
 4. Try the "Force" version of commands to bypass language validation
 5. Open an issue with details about your configuration and the error
