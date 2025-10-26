@@ -187,6 +187,12 @@ function M.create_command_handler(func)
     end
 end
 
+function M.create_clickup_subcommand_completion(base_subcommands, languages_config)
+    -- Uses regular subcommand completion
+    -- ClickUp-specific status completion is handled in create_clickup_subcommand_handler
+    return M.create_subcommand_completion(base_subcommands, languages_config)
+end
+
 function M.create_language_completion(languages_config)
     return function()
         local langs = {}
@@ -229,7 +235,6 @@ function M.create_subcommand_completion(subcommands, languages_config)
     end
 end
 
--- Function to create new-style command handler with subcommand support
 function M.create_subcommand_handler(handlers)
     return function(opts)
         local args = {}
@@ -259,4 +264,58 @@ function M.create_subcommand_handler(handlers)
     end
 end
 
+-- Function to create ClickUp-specific command handler with status support
+function M.create_clickup_subcommand_handler(handlers, custom_status_handler)
+    return function(opts)
+        local args = {}
+        if opts.args and opts.args ~= "" then
+            args = vim.split(vim.trim(opts.args), "%s+")
+        end
+
+        -- If no arguments, default to "new" action
+        if #args == 0 then
+            if handlers.new then
+                handlers.new(nil) -- No language override
+            else
+                vim.notify("No default action available", vim.log.levels.ERROR)
+            end
+            return
+        end
+
+        local first_arg = args[1]
+        local second_arg = args[2]
+        local third_arg = args[3]
+
+        -- Check if first argument is a known subcommand
+        if handlers[first_arg] then
+            handlers[first_arg](second_arg) -- second_arg might be language override
+            return
+        end
+
+        -- Check if it's a "status" command: ClickUpTask status StatusName [language]
+        if first_arg == "status" and second_arg then
+            local status_name = second_arg
+            local language_override = third_arg
+            custom_status_handler(status_name, language_override)
+            return
+        end
+
+        -- Check if first argument might be a custom status name directly
+        local config = require("comment-tasks.core.config")
+        local available_statuses = config.get_clickup_available_statuses()
+
+        for _, status in ipairs(available_statuses) do
+            if first_arg == status then
+                custom_status_handler(status, second_arg) -- second_arg is language override
+                return
+            end
+        end
+
+        -- If we get here, it's an unknown command
+        local known_commands = vim.tbl_keys(handlers)
+        table.insert(known_commands, "status")
+        vim.list_extend(known_commands, available_statuses)
+        vim.notify("Unknown subcommand: " .. first_arg .. ". Available: " .. table.concat(known_commands, ", "), vim.log.levels.ERROR)
+    end
+end
 return M

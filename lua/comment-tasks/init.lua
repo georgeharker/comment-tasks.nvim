@@ -1,14 +1,9 @@
- --
- -- TODO: v2.0.0 Cleanup Plan (Breaking Changes)
- -- - Remove all legacy commands (ClickUpClose, ClickUpReview, etc.) - search "TODO: Remove these legacy commands"
- -- - Remove deprecation wrapper functions - search "TODO: Remove these in v2.0.0"
- -- - Remove safe wrapper functions - search "TODO: Remove these safe wrapper functions"
- -- - Clean up utils.create_safe_wrapper function
- -- With ~10 users, this is a good time for cleanup!
+-- v2.0.0 Breaking Changes Complete
+-- All legacy commands and wrapper functions have been removed.
+-- The plugin now uses a clean subcommand-based structure with configurable ClickUp statuses.
 
 local M = {}
 
--- Import core modules
 local config = require("comment-tasks.core.config")
 local utils = require("comment-tasks.core.utils")
 local detection = require("comment-tasks.core.detection")
@@ -297,6 +292,20 @@ function M.in_progress_task_from_comment(lang_override)
     M.update_task_status_from_comment("in progress", "Setting to in progress", lang_override)
 end
 
+-- Update ClickUp task to custom status
+function M.update_clickup_task_status_from_comment(status_name, lang_override)
+    -- Validate that this is for ClickUp
+    if not config.is_provider_enabled("clickup") then
+        utils.notify_error("ClickUp provider is not enabled")
+        return
+    end
+
+    -- Get the actual status name from configuration
+    local actual_status = config.get_clickup_status(status_name)
+    local action_name = "Setting to " .. actual_status
+
+    M.update_task_status_from_comment(status_name, action_name, lang_override)
+end
 
 function M.setup(user_config)
     -- Setup configuration
@@ -321,8 +330,10 @@ function M.setup(user_config)
     -- Create user commands with proper function references
     local create_command_handler = utils.create_command_handler
     local create_subcommand_handler = utils.create_subcommand_handler
+    local create_clickup_subcommand_handler = utils.create_clickup_subcommand_handler
     local language_completion = utils.create_language_completion(current_config.languages)
     local subcommand_completion = utils.create_subcommand_completion
+    local clickup_subcommand_completion = utils.create_clickup_subcommand_completion
 
     -- Multi-provider commands (use default provider)
     vim.api.nvim_create_user_command(
@@ -349,17 +360,17 @@ function M.setup(user_config)
     -- Provider-specific commands with subcommand support
     vim.api.nvim_create_user_command(
         "ClickUpTask",
-        create_subcommand_handler({
+        create_clickup_subcommand_handler({
             new = M.create_clickup_task_from_comment,
             close = M.close_task_from_comment,
             review = M.review_task_from_comment,
             progress = M.in_progress_task_from_comment,
             addfile = M.add_file_to_task_sources,
-        }),
+        }, M.update_clickup_task_status_from_comment),
         {
-            desc = "ClickUp task operations: [new|close|review|progress|addfile] [language]",
+            desc = "ClickUp task operations: [new|close|review|progress|addfile|status <status>|<custom_status>] [language]",
             nargs = "*",
-            complete = subcommand_completion({"new", "close", "review", "progress", "addfile"}, current_config.languages)
+            complete = clickup_subcommand_completion({"new", "close", "review", "progress", "addfile"}, current_config.languages)
         })
 
     vim.api.nvim_create_user_command(
@@ -401,8 +412,6 @@ function M.setup(user_config)
             complete = subcommand_completion({"new", "close", "addfile"}, current_config.languages)
         })
 
-    -- Legacy ClickUp commands for backward compatibility
-    -- TODO: Remove these legacy commands in v2.0.0 (breaking change)
 
     -- Optional keybinding (fixed)
     if current_config.keymap then

@@ -109,14 +109,6 @@ describe("comment-tasks plugin initialization", function()
             assert.is_function(comment_tasks.in_progress_task_from_comment)
         end)
 
-        it("should have safe wrapper functions", function()
-            local comment_tasks = require("comment-tasks")
-
-            assert.is_function(comment_tasks.close_task_from_comment_safe)
-            assert.is_function(comment_tasks.review_task_from_comment_safe)
-            assert.is_function(comment_tasks.in_progress_task_from_comment_safe)
-            assert.is_function(comment_tasks.add_file_to_task_sources_safe)
-        end)
     end)
 
     describe("utility functions", function()

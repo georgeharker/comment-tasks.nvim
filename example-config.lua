@@ -14,6 +14,22 @@ comment_tasks.setup({
             api_key_env = "CLICKUP_API_KEY", -- Environment variable name
             list_id = "your_clickup_list_id", -- Required for ClickUp
             team_id = "your_clickup_team_id", -- Optional
+            
+            -- Configurable ClickUp statuses (optional)
+            statuses = {
+                new = "To Do",               -- Status for new tasks
+                completed = "Complete",      -- Status for completed tasks  
+                review = "Review",           -- Status for review tasks
+                in_progress = "In Progress", -- Status for in-progress tasks
+                
+                -- Custom status mappings for your ClickUp workspace
+                custom = {
+                    blocked = "Blocked",
+                    testing = "Testing", 
+                    cancelled = "Cancelled",
+                    waiting = "Waiting for Approval"
+                }
+            },
         },
         
         github = {
@@ -165,7 +181,20 @@ Usage Examples:
    :TodoistTask         - Create Todoist task
    :GitLabTask          - Create GitLab issue
 
-3. ClickUp-specific commands (backward compatibility):
+3. ClickUp status commands (NEW - configurable statuses):
+   :ClickUpTask new             - Create ClickUp task
+   :ClickUpTask close           - Close ClickUp task (uses configured 'completed' status)
+   :ClickUpTask review          - Set to review (uses configured 'review' status)
+   :ClickUpTask progress        - Set to in progress (uses configured 'in_progress' status)
+   :ClickUpTask blocked         - Set to blocked (uses custom 'blocked' status if configured)
+   :ClickUpTask status Testing  - Set to any custom status
+   :ClickUpTask cancelled       - Set to cancelled (uses custom 'cancelled' status if configured)
+
+   Examples with language override:
+   :ClickUpTask blocked python  - Set to blocked status with Python language detection
+   :ClickUpTask status Testing javascript - Set to Testing status with JavaScript detection
+
+4. ClickUp-specific commands (backward compatibility):
    :ClickupTaskXref     - Cross-reference bugs with file locations
    :ClickUpCleanupSourceFiles - Clean up SourceFiles custom fields
    :ClickUpClearResults - Clear XRef results

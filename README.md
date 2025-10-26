@@ -141,6 +141,21 @@ require("comment-tasks").setup({
       api_key_env = "CLICKUP_API_KEY",  -- Environment variable name
       list_id = "list_id",              -- Required: ClickUp list ID
       team_id = "team_id",              -- Optional: ClickUp team ID  
+          
+          -- Optional: Configurable ClickUp statuses
+          statuses = {
+            new = "To Do",               -- Status for new tasks
+            completed = "Complete",      -- Status for completed tasks  
+            review = "Review",           -- Status for review tasks
+            in_progress = "In Progress", -- Status for in-progress tasks
+            
+            -- Custom status mappings for your ClickUp workspace
+            custom = {
+              blocked = "Blocked",
+              testing = "Testing", 
+              cancelled = "Cancelled"
+            }
+          },
     },
     
     github = {
@@ -206,6 +221,12 @@ require("comment-tasks").setup({
 :ClickUpTask progress " Set ClickUp task to in progress
 :ClickUpTask addfile " Add file to ClickUp task SourceFiles
 
+" ClickUp with custom statuses (if configured)
+:ClickUpTask blocked     " Set to blocked status
+:ClickUpTask testing     " Set to testing status  
+:ClickUpTask cancelled   " Set to cancelled status
+:ClickUpTask status <name> " Set to any custom status
+
 " GitHub
 :GitHubTask         " Create GitHub issue (default: new)
 :GitHubTask new     " Create GitHub issue
@@ -267,10 +288,13 @@ For existing tasks (with URLs in comments), you can update status:
 ```
 
 **Status Support by Provider:**
-- **ClickUp**: Full status management (complete, in progress, review, etc.)
-- **GitHub**: Open/Close issues (maps "complete"/"closed" to "closed" state)
-- **Todoist**: Close tasks (maps "complete"/"closed" to task completion)
-- **GitLab**: Close/Reopen issues with label support for advanced statuses
+
+**ClickUp Status Configuration:**
+The ClickUp provider now supports configurable status names that match your workspace setup:
+- Configure status names in your setup to match your ClickUp list statuses exactly
+- Supports both predefined statuses (default, completed, review, in_progress) and custom statuses
+- Status names are case-sensitive and must match your ClickUp workspace configuration
+- If no status configuration is provided, falls back to legacy hardcoded names for backward compatibility
 
 ### File Reference Management
 
@@ -445,6 +469,44 @@ Run tests with:
 ### Command Structure Changes
 
 The plugin has moved to a cleaner subcommand-based structure for better organization and intuitive usage.
+
+### ClickUp Status Configuration (NEW)
+
+The plugin now supports configurable ClickUp status names to match your workspace configuration.
+
+#### Recommended: Configure Your Status Names
+```lua
+require("comment-tasks").setup({
+  providers = {
+    clickup = {
+      enabled = true,
+      api_key_env = "CLICKUP_API_KEY",
+      list_id = "your_list_id",
+      
+      -- Configure to match your ClickUp workspace statuses
+      statuses = {
+        new = "To Do",               -- Exact name for new tasks in your ClickUp list
+        completed = "Complete",      -- Exact name for completed status
+        review = "Review",           -- Exact name for review status  
+        in_progress = "In Progress", -- Exact name for in-progress status
+        
+        -- Add custom statuses used in your workspace
+        custom = {
+          blocked = "Blocked",
+          testing = "Testing",
+          cancelled = "Cancelled"
+        }
+      }
+    }
+  }
+})
+```
+
+#### Backward Compatibility
+If you don't configure status names, the plugin uses the original hardcoded values:
+- `"to do"` for new tasks (configured via `new` status)
+
+**Note:** If these hardcoded names don't exist in your ClickUp list, status updates may fail. Configure the correct names for your workspace.
 
 #### Before (Deprecated)
 ```vim

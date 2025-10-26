@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2024-10-26
+
+### Breaking Changes 🚨
+- **REMOVED**: All legacy commands (`ClickUpClose`, `ClickUpReview`, `ClickUpInProgress`, etc.)
+- **REMOVED**: Safe wrapper functions for backward compatibility  
+- **REMOVED**: Deprecation wrapper functions
+- **CHANGED**: Command structure now requires explicit subcommands (e.g., `ClickUpTask new` instead of `ClickUpTask`)
+
+### Added ✨
+- **NEW**: Configurable ClickUp status names that match your workspace
+- **NEW**: Custom status support for ClickUp with direct status commands
+- **NEW**: Enhanced ClickUp completion with status names
+- **NEW**: Clean subcommand-based structure for all providers
+
+### Improved 🔧
+- **CLEANED**: Removed all TODO comments and legacy code paths
+- **CLEANED**: Consistent formatting and whitespace cleanup across all Lua files
+- **CLEANED**: Removed trailing whitespace from all source files
+- **UPDATED**: Test suite updated to reflect v2.0.0 changes
+- **UPDATED**: Documentation with clear migration guide
+
 ## [Unreleased]
 
 ### Added

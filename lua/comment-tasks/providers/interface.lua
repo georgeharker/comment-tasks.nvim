@@ -34,9 +34,10 @@ local Provider = {}
 Provider.__index = Provider
 
  --- Create a new provider instance
- ---@param config ProviderConfig Provider configuration
- ---@return Provider provider instance
- ---@overload fun(config: ProviderConfig): Provider
+--- Create a new provider instance
+---@param config ProviderConfig Provider configuration
+---@return Provider provider instance
+---@overload fun(config: ProviderConfig): Provider
 function Provider:new(config)
     local provider = setmetatable({}, self)
     provider.config = config or {}
@@ -127,7 +128,7 @@ function Provider:validate_config()
     return true, nil
 end
 
- ---@type table<string, Provider>
+---@type table<string, Provider>
 M.providers = {}
 
 ---@param name string Provider name
@@ -164,7 +165,7 @@ function M.create_provider(name, config)
     return provider, nil
 end
 
- ---@return string[] provider_names
+---@return string[] provider_names
 function M.get_provider_names()
     local names = {}
     for name, _ in pairs(M.providers) do

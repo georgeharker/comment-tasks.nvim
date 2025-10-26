@@ -12,6 +12,15 @@ M.default_config = {
             list_id = nil,
             team_id = nil,
             enabled = true,
+            -- Configurable ClickUp statuses
+            statuses = {
+                new = "to do",               -- Status for new tasks
+                completed = "complete",      -- Status for completed tasks
+                review = "review",           -- Status for review tasks
+                in_progress = "in progress", -- Status for in-progress tasks
+                -- Custom status mappings can be added by users
+                custom = {}
+            },
         },
         github = {
             api_key_env = "GITHUB_TOKEN",
@@ -351,4 +360,59 @@ function M.validate_config()
     }
 end
 
+function M.get_clickup_status(status_name)
+    local clickup_config = M.get_provider_config("clickup")
+    if not clickup_config or not clickup_config.statuses then
+        -- Fallback to hardcoded values for backward compatibility
+        local fallback_statuses = {
+            new = "to do",
+            completed = "complete",
+            review = "review",
+            in_progress = "in progress"
+        }
+        return fallback_statuses[status_name] or status_name
+    end
+
+    local statuses = clickup_config.statuses
+
+    -- Check predefined statuses first
+    if statuses[status_name] then
+        return statuses[status_name]
+    end
+
+    -- Check custom statuses
+    if statuses.custom and statuses.custom[status_name] then
+        return statuses.custom[status_name]
+    end
+
+    -- Return the status name as-is if not found (allows direct status names)
+    return status_name
+end
+
+function M.get_clickup_available_statuses()
+    local clickup_config = M.get_provider_config("clickup")
+    if not clickup_config or not clickup_config.statuses then
+        return {"new", "completed", "review", "in_progress"}
+    end
+
+    local available = {}
+    local statuses = clickup_config.statuses
+
+    -- Add predefined statuses
+    for key, _ in pairs(statuses) do
+        if key ~= "custom" then
+            table.insert(available, key)
+        end
+    end
+
+    -- Add custom statuses
+    if statuses.custom then
+        for key, _ in pairs(statuses.custom) do
+            table.insert(available, key)
+        end
+    end
+
+    table.sort(available)
+    return available
+end
 return M

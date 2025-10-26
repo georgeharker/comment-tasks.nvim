@@ -2,6 +2,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local utils = require("comment-tasks.core.utils")
+local config = require("comment-tasks.core.config")
 local curl = require("plenary.curl")
 
 ---@type Provider
@@ -12,8 +13,8 @@ ClickUpProvider.__index = ClickUpProvider
 setmetatable(ClickUpProvider, { __index = Provider })
 
 --- Create a new ClickUp provider instance
-function ClickUpProvider:new(config)
-    local provider = Provider.new(self, config)
+function ClickUpProvider:new(provider_config)
+    local provider = Provider.new(self, provider_config)
     return provider
 end
 
@@ -57,7 +58,7 @@ function ClickUpProvider:create_task(task_name, filename, callback)
     local task_data = {
         name = task_name,
         description = description,
-        status = "to do",
+        status = config.get_clickup_status("new"),
     }
 
     local json_data = vim.fn.json_encode(task_data)
@@ -128,7 +129,6 @@ function ClickUpProvider:create_task(task_name, filename, callback)
     })
 end
 
---- Update ClickUp task status
 function ClickUpProvider:update_task_status(task_id, status, callback)
     local api_key, error = self:get_api_key()
     if not api_key then
@@ -136,9 +136,12 @@ function ClickUpProvider:update_task_status(task_id, status, callback)
         return
     end
 
+    -- Get the configured status name
+    local clickup_status = config.get_clickup_status(status)
+
     -- Prepare API request data
     local task_data = {
-        status = status,
+        status = clickup_status,
     }
 
     local json_data = vim.fn.json_encode(task_data)
