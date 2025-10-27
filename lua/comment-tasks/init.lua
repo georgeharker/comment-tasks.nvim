@@ -8,12 +8,16 @@ local config = require("comment-tasks.core.config")
 local utils = require("comment-tasks.core.utils")
 local detection = require("comment-tasks.core.detection")
 local interface = require("comment-tasks.providers.interface")
-
--- Import providers (this registers them automatically)
 require("comment-tasks.providers.clickup")
 require("comment-tasks.providers.github")
 require("comment-tasks.providers.todoist")
 require("comment-tasks.providers.gitlab")
+require("comment-tasks.providers.asana")
+require("comment-tasks.providers.linear")
+require("comment-tasks.providers.jira")
+require("comment-tasks.providers.notion")
+require("comment-tasks.providers.monday")
+require("comment-tasks.providers.trello")
 
 -- Provider instances cache
 local provider_instances = {}
@@ -142,19 +146,17 @@ function M.create_task_from_comment(lang_override, provider_name)
     show_task_dialog_for_block(comment_content, comment_info, filename, provider_name)
 end
 
--- Update task status from comment
-function M.update_task_status_from_comment(status, action_name, lang_override)
-    local current_config = config.get_config()
+function M.update_task_status_from_comment(status, lang_override, _)
 
-    if not utils.check_language_supported(lang_override, current_config.languages) then
+    if not utils.check_language_supported(lang_override, config.languages) then
         return
     end
 
     -- Try to find a comment using generalized detection
     local comment_info = detection.get_comment_info(
         lang_override,
-        current_config.languages,
-        current_config.fallback_to_regex
+        config.languages,
+        config.fallback_to_regex
     )
 
     if not comment_info then
@@ -184,7 +186,9 @@ function M.update_task_status_from_comment(status, action_name, lang_override)
         return
     end
 
-    utils.notify_info((action_name or "Updating") .. " task: " .. task_identifier, provider.name)
+    -- Generate action name from status
+    local action_name = "Setting to " .. status
+    utils.notify_info(action_name .. " task: " .. task_identifier, provider.name)
 
     -- Update task status using appropriate provider
     provider:update_task_status(task_identifier, status, function(success, update_error)
@@ -199,11 +203,9 @@ function M.update_task_status_from_comment(status, action_name, lang_override)
     end)
 end
 
--- Add file to task from comment
-function M.add_file_to_task_sources(lang_override)
-    local current_config = config.get_config()
+function M.add_file_to_task_sources(lang_override, _)
 
-    if not utils.check_language_supported(lang_override, current_config.languages) then
+    if not utils.check_language_supported(lang_override, config.languages) then
         return
     end
 
@@ -217,8 +219,8 @@ function M.add_file_to_task_sources(lang_override)
     -- Try to find a comment using generalized detection
     local comment_info = detection.get_comment_info(
         lang_override,
-        current_config.languages,
-        current_config.fallback_to_regex
+        config.languages,
+        config.fallback_to_regex
     )
 
     if not comment_info then
@@ -262,49 +264,8 @@ function M.add_file_to_task_sources(lang_override)
     end)
 end
 
--- Provider-specific task creation functions
-function M.create_clickup_task_from_comment(lang_override)
-    M.create_task_from_comment(lang_override, "clickup")
-end
-
-function M.create_github_task_from_comment(lang_override)
-    M.create_task_from_comment(lang_override, "github")
-end
-
-function M.create_todoist_task_from_comment(lang_override)
-    M.create_task_from_comment(lang_override, "todoist")
-end
-
-function M.create_gitlab_task_from_comment(lang_override)
-    M.create_task_from_comment(lang_override, "gitlab")
-end
-
--- Status update functions
-function M.close_task_from_comment(lang_override)
-    M.update_task_status_from_comment("complete", "Closing", lang_override)
-end
-
-function M.review_task_from_comment(lang_override)
-    M.update_task_status_from_comment("review", "Setting to review", lang_override)
-end
-
-function M.in_progress_task_from_comment(lang_override)
-    M.update_task_status_from_comment("in progress", "Setting to in progress", lang_override)
-end
-
--- Update ClickUp task to custom status
-function M.update_clickup_task_status_from_comment(status_name, lang_override)
-    -- Validate that this is for ClickUp
-    if not config.is_provider_enabled("clickup") then
-        utils.notify_error("ClickUp provider is not enabled")
-        return
-    end
-
-    -- Get the actual status name from configuration
-    local actual_status = config.get_clickup_status(status_name)
-    local action_name = "Setting to " .. actual_status
-
-    M.update_task_status_from_comment(status_name, action_name, lang_override)
+function M.close_task_from_comment(lang_override, provider_name)
+    return M.update_task_status_from_comment("completed", lang_override, provider_name)
 end
 
 function M.setup(user_config)
@@ -329,98 +290,362 @@ function M.setup(user_config)
 
     -- Create user commands with proper function references
     local create_command_handler = utils.create_command_handler
-    local create_subcommand_handler = utils.create_subcommand_handler
-    local create_clickup_subcommand_handler = utils.create_clickup_subcommand_handler
     local language_completion = utils.create_language_completion(current_config.languages)
     local subcommand_completion = utils.create_subcommand_completion
-    local clickup_subcommand_completion = utils.create_clickup_subcommand_completion
 
     -- Multi-provider commands (use default provider)
     vim.api.nvim_create_user_command(
-        "TaskCreate",
-        create_command_handler(M.create_task_from_comment),
+        "CommentTask",
+        function(opts)
+            local args = {}
+            if opts.args and opts.args ~= "" then
+                args = vim.split(vim.trim(opts.args), "%s+")
+            end
+
+            -- Default to "new" if no args
+            if #args == 0 then
+                M.create_task_from_comment()
+                return
+            end
+
+            local first_arg = args[1]
+            local second_arg = args[2]
+
+            -- Handle standard subcommands
+            if first_arg == "new" then
+                M.create_task_from_comment(second_arg) -- Uses default_provider internally
+            elseif first_arg == "close" then
+                M.update_task_status_from_comment("complete", second_arg) -- Auto-detects provider from URL
+            elseif first_arg == "addfile" then
+                M.add_file_to_task_sources(second_arg) -- Auto-detects provider from URL
+            else
+                -- Treat as custom status for default provider
+                local default_provider = config.get_config().default_provider
+                -- For all providers, use the generic function
+                M.update_task_status_from_comment(first_arg, second_arg, default_provider)
+            end
+        end,
         {
-            desc = "Create task from comment using default provider (optional language arg)",
-            nargs = "?",
-            complete = language_completion
+            desc = "Generic task operations using default provider: [new|close|addfile|<custom_status>] [language]",
+            nargs = "*",
+            complete = subcommand_completion({"new", "close", "addfile"}, current_config.languages)
         })
 
-    vim.api.nvim_create_user_command("TaskClose", create_command_handler(M.close_task_from_comment), {
-        desc = "Close task from comment (optional language arg)",
+    vim.api.nvim_create_user_command("CommentTaskClose", create_command_handler(function(lang_override)
+        M.update_task_status_from_comment("complete", lang_override)
+    end), {
+        desc = "Close task from comment using default provider (optional language arg)",
         nargs = "?",
         complete = language_completion,
     })
 
-    vim.api.nvim_create_user_command("TaskAddFile", create_command_handler(M.add_file_to_task_sources), {
-        desc = "Add current file to task from comment (optional language arg)",
+    vim.api.nvim_create_user_command("CommentTaskAddFile", create_command_handler(M.add_file_to_task_sources), {
+        desc = "Add current file to task using default provider (optional language arg)",
         nargs = "?",
         complete = language_completion,
     })
 
-    -- Provider-specific commands with subcommand support
-    vim.api.nvim_create_user_command(
-        "ClickUpTask",
-        create_clickup_subcommand_handler({
-            new = M.create_clickup_task_from_comment,
-            close = M.close_task_from_comment,
-            review = M.review_task_from_comment,
-            progress = M.in_progress_task_from_comment,
-            addfile = M.add_file_to_task_sources,
-        }, M.update_clickup_task_status_from_comment),
-        {
-            desc = "ClickUp task operations: [new|close|review|progress|addfile|status <status>|<custom_status>] [language]",
-            nargs = "*",
-            complete = clickup_subcommand_completion({"new", "close", "review", "progress", "addfile"}, current_config.languages)
-        })
+    -- Provider-specific commands with subcommand support (only for enabled providers)
 
-    vim.api.nvim_create_user_command(
-        "GitHubTask",
-        create_subcommand_handler({
-            new = M.create_github_task_from_comment,
-            close = M.close_task_from_comment,
-            addfile = M.add_file_to_task_sources,
-        }),
-        {
-            desc = "GitHub task operations: [new|close|addfile] [language]",
-            nargs = "*",
-            complete = subcommand_completion({"new", "close", "addfile"}, current_config.languages)
-        })
-
-    vim.api.nvim_create_user_command(
-        "TodoistTask",
-        create_subcommand_handler({
-            new = M.create_todoist_task_from_comment,
-            close = M.close_task_from_comment,
-            addfile = M.add_file_to_task_sources,
-        }),
-        {
-            desc = "Todoist task operations: [new|close|addfile] [language]",
-            nargs = "*",
-            complete = subcommand_completion({"new", "close", "addfile"}, current_config.languages)
-        })
-
-    vim.api.nvim_create_user_command(
-        "GitLabTask",
-        create_subcommand_handler({
-            new = M.create_gitlab_task_from_comment,
-            close = M.close_task_from_comment,
-            addfile = M.add_file_to_task_sources,
-        }),
-        {
-            desc = "GitLab task operations: [new|close|addfile] [language]",
-            nargs = "*",
-            complete = subcommand_completion({"new", "close", "addfile"}, current_config.languages)
-        })
-
-
-    -- Optional keybinding (fixed)
-    if current_config.keymap then
-        vim.keymap.set("n", current_config.keymap, function()
-            M.create_task_from_comment()
-        end, {
-            desc = "Create task from comment (default provider)",
-        })
+    -- ClickUp commands
+    if config.is_provider_enabled("clickup") then
+        vim.api.nvim_create_user_command(
+            "ClickUpTask",
+            utils.create_provider_command_handler("clickup",
+                function(lang_override) M.create_task_from_comment(lang_override, "clickup") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "clickup") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "clickup") end
+            ),
+            {
+                desc = "ClickUp task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("clickup", current_config.languages)
+            })
     end
+
+    -- GitHub commands
+    if config.is_provider_enabled("github") then
+        vim.api.nvim_create_user_command(
+            "GitHubTask",
+            utils.create_provider_command_handler("github",
+                function(lang_override) M.create_task_from_comment(lang_override, "github") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "github") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "github") end
+            ),
+            {
+                desc = "GitHub task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("github", current_config.languages)
+            })
+    end
+
+    -- Todoist commands
+    if config.is_provider_enabled("todoist") then
+        vim.api.nvim_create_user_command(
+            "TodoistTask",
+            utils.create_provider_command_handler("todoist",
+                function(lang_override) M.create_task_from_comment(lang_override, "todoist") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "todoist") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "todoist") end
+            ),
+            {
+                desc = "Todoist task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("todoist", current_config.languages)
+            })
+    end
+
+    -- GitLab commands
+    if config.is_provider_enabled("gitlab") then
+        vim.api.nvim_create_user_command(
+            "GitLabTask",
+            utils.create_provider_command_handler("gitlab",
+                function(lang_override) M.create_task_from_comment(lang_override, "gitlab") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "gitlab") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "gitlab") end
+            ),
+            {
+                desc = "GitLab task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("gitlab", current_config.languages)
+            })
+    end
+
+    -- Asana commands
+    if config.is_provider_enabled("asana") then
+        vim.api.nvim_create_user_command(
+            "AsanaTask",
+            utils.create_provider_command_handler("asana",
+                function(lang_override) M.create_task_from_comment(lang_override, "asana") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "asana") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "asana") end
+            ),
+            {
+                desc = "Asana task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("asana", current_config.languages)
+            })
+    end
+
+    -- Linear commands
+    if config.is_provider_enabled("linear") then
+        vim.api.nvim_create_user_command(
+            "LinearTask",
+            utils.create_provider_command_handler("linear",
+                function(lang_override) M.create_task_from_comment(lang_override, "linear") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "linear") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "linear") end
+            ),
+            {
+                desc = "Linear task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("linear", current_config.languages)
+            })
+    end
+
+    -- Jira commands
+    if config.is_provider_enabled("jira") then
+        vim.api.nvim_create_user_command(
+            "JiraTask",
+            utils.create_provider_command_handler("jira",
+                function(lang_override) M.create_task_from_comment(lang_override, "jira") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "jira") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "jira") end
+            ),
+            {
+                desc = "Jira task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("jira", current_config.languages)
+            })
+    end
+
+    -- Notion commands
+    if config.is_provider_enabled("notion") then
+        vim.api.nvim_create_user_command(
+            "NotionTask",
+            utils.create_provider_command_handler("notion",
+                function(lang_override) M.create_task_from_comment(lang_override, "notion") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "notion") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "notion") end
+            ),
+            {
+                desc = "Notion task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("notion", current_config.languages)
+            })
+    end
+
+    -- Monday.com commands
+    if config.is_provider_enabled("monday") then
+        vim.api.nvim_create_user_command(
+            "MondayTask",
+            utils.create_provider_command_handler("monday",
+                function(lang_override) M.create_task_from_comment(lang_override, "monday") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "monday") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "monday") end
+            ),
+            {
+                desc = "Monday.com task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("monday", current_config.languages)
+            })
+    end
+
+    -- Trello commands
+    if config.is_provider_enabled("trello") then
+        vim.api.nvim_create_user_command(
+            "TrelloTask",
+            utils.create_provider_command_handler("trello",
+                function(lang_override) M.create_task_from_comment(lang_override, "trello") end,
+                function(status, lang_override) M.update_task_status_from_comment(status, lang_override, "trello") end,
+                function(lang_override) M.add_file_to_task_sources(lang_override, "trello") end
+            ),
+            {
+                desc = "Trello task operations: [<status>|addfile] [language] (statuses from config)",
+                nargs = "*",
+                complete = utils.create_provider_completion("trello", current_config.languages)
+            })
+    end
+
+
 end
 
+
+-- TODO: Tidy up these functions
+-- Provider-specific wrapper functions for easier keybinding setup
+-- These functions provide cleaner API for users who want provider-specific bindings
+
+
+-- Provider-specific wrapper functions for easier keybinding setup
+-- These functions provide cleaner API for users who want provider-specific bindings
+
+-- ClickUp wrapper functions
+function M.create_clickup_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "clickup")
+end
+
+function M.update_clickup_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "clickup")
+end
+
+function M.add_clickup_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "clickup")
+end
+
+-- GitHub wrapper functions
+function M.create_github_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "github")
+end
+
+function M.update_github_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "github")
+end
+
+function M.add_github_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "github")
+end
+
+-- Asana wrapper functions
+function M.create_asana_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "asana")
+end
+
+function M.update_asana_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "asana")
+end
+
+function M.add_asana_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "asana")
+end
+
+-- Linear wrapper functions
+function M.create_linear_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "linear")
+end
+
+function M.update_linear_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "linear")
+end
+
+function M.add_linear_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "linear")
+end
+
+-- Jira wrapper functions
+function M.create_jira_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "jira")
+end
+
+function M.update_jira_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "jira")
+end
+
+function M.add_jira_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "jira")
+end
+
+-- Notion wrapper functions
+function M.create_notion_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "notion")
+end
+
+function M.update_notion_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "notion")
+end
+
+function M.add_notion_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "notion")
+end
+
+-- Monday wrapper functions
+function M.create_monday_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "monday")
+end
+
+function M.update_monday_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "monday")
+end
+
+function M.add_monday_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "monday")
+end
+
+-- Trello wrapper functions
+function M.create_trello_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "trello")
+end
+
+function M.update_trello_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "trello")
+end
+
+function M.add_trello_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "trello")
+end
+
+-- GitLab wrapper functions
+function M.create_gitlab_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "gitlab")
+end
+
+function M.update_gitlab_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "gitlab")
+end
+
+function M.add_gitlab_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "gitlab")
+end
+
+-- Todoist wrapper functions
+function M.create_todoist_task_from_comment(lang_override)
+    return M.create_task_from_comment(lang_override, "todoist")
+end
+
+function M.update_todoist_task_status_from_comment(status, lang_override)
+    return M.update_task_status_from_comment(status, lang_override, "todoist")
+end
+
+function M.add_todoist_file_to_task_sources(lang_override)
+    return M.add_file_to_task_sources(lang_override, "todoist")
+end
 return M

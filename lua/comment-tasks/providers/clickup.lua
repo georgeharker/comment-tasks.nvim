@@ -58,7 +58,7 @@ function ClickUpProvider:create_task(task_name, filename, callback)
     local task_data = {
         name = task_name,
         description = description,
-        status = config.get_clickup_status("new"),
+        status = config.get_provider_status("clickup", "new"),
     }
 
     local json_data = vim.fn.json_encode(task_data)
@@ -137,7 +137,7 @@ function ClickUpProvider:update_task_status(task_id, status, callback)
     end
 
     -- Get the configured status name
-    local clickup_status = config.get_clickup_status(status)
+    local clickup_status = config.get_provider_status("clickup", status)
 
     -- Prepare API request data
     local task_data = {

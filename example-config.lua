@@ -6,7 +6,7 @@ local comment_tasks = require("comment-tasks")
 comment_tasks.setup({
     -- Default provider to use when no specific provider is mentioned
     default_provider = "clickup", -- Options: "clickup", "github", "todoist"
-    
+
     -- Provider configurations
     providers = {
         clickup = {
@@ -14,49 +14,79 @@ comment_tasks.setup({
             api_key_env = "CLICKUP_API_KEY", -- Environment variable name
             list_id = "your_clickup_list_id", -- Required for ClickUp
             team_id = "your_clickup_team_id", -- Optional
-            
+
             -- Configurable ClickUp statuses (optional)
             statuses = {
-                new = "To Do",               -- Status for new tasks
-                completed = "Complete",      -- Status for completed tasks  
-                review = "Review",           -- Status for review tasks
-                in_progress = "In Progress", -- Status for in-progress tasks
-                
-                -- Custom status mappings for your ClickUp workspace
-                custom = {
-                    blocked = "Blocked",
-                    testing = "Testing", 
-                    cancelled = "Cancelled",
-                    waiting = "Waiting for Approval"
-                }
+                -- All statuses in flat configuration
+                new = "To Do",               -- Special: creates tasks (:ClickUpTask new)
+                completed = "Complete",      -- Special: closes tasks (:ClickUpTask completed)
+                review = "Review",           -- Regular status (:ClickUpTask review)
+                in_progress = "In Progress", -- Regular status (:ClickUpTask in_progress)
+                blocked = "Blocked",         -- Regular status (:ClickUpTask blocked)
+                testing = "Testing",         -- Regular status (:ClickUpTask testing)
+                cancelled = "Cancelled",     -- Regular status (:ClickUpTask cancelled)
+                waiting = "Waiting for Approval" -- Regular status (:ClickUpTask waiting)
             },
         },
-        
+
         github = {
             enabled = true,
             api_key_env = "GITHUB_TOKEN", -- GitHub Personal Access Token
             repo_owner = "your_username", -- GitHub username or organization
             repo_name = "your_repository", -- Repository name
+            -- GitHub simple workflow
+            statuses = {
+                new = "open",        -- Special: creates issues
+                completed = "closed" -- Special: closes issues
+            },
         },
-        
+
         todoist = {
             enabled = true,
             api_key_env = "TODOIST_API_TOKEN", -- Todoist API token
             project_id = "your_project_id", -- Optional: specific project ID
+            -- Todoist task workflow
+            statuses = {
+                new = "incomplete",  -- Special: creates tasks
+                completed = "complete" -- Special: completes tasks
+            },
         },
-        
+
         gitlab = {
             enabled = true,
             api_key_env = "GITLAB_TOKEN", -- GitLab Personal Access Token
             project_id = "12345", -- GitLab project ID (numeric)
             gitlab_url = "https://gitlab.com", -- Optional: for self-hosted GitLab
+            -- GitLab issue workflow
+            statuses = {
+                new = "opened",      -- Special: creates issues
+                completed = "closed" -- Special: closes issues
+            },
+        },
+
+        linear = {
+            enabled = true,
+            api_key_env = "LINEAR_API_KEY", -- Linear API key
+            team_id = "team_abc123", -- Required: Linear team ID
+            project_id = "project_def456", -- Optional: specific project
+            -- Linear supports both name resolution and direct state IDs
+            statuses = {
+                new = "Backlog",              -- Special: creates issues (name resolution)
+                completed = "Done",           -- Special: closes issues (name resolution)
+                review = "In Review",         -- Regular status (name resolution)
+                in_progress = "In Development", -- Regular status (name resolution)
+                blocked = "Blocked",          -- Regular status (name resolution)
+                -- Use # prefix for direct Linear state IDs (if you know them):
+                urgent = "#state_abc123",     -- Regular status (direct state ID)
+                archived = "#state_def456"    -- Regular status (direct state ID)
+            },
         },
     },
-    
+
     -- Comment prefixes to recognize (applies to all providers)
     comment_prefixes = {
         "TODO",
-        "FIXME", 
+        "FIXME",
         "BUG",
         "HACK",
         "WARN",
@@ -75,50 +105,49 @@ comment_tasks.setup({
         "REFACTOR",
         "CLEANUP",
     },
-    
-    -- Optional: Set keybindings
-    keymap = "<leader>tc", -- Creates task using default provider
-    
+
     -- Language support and Tree-sitter configuration
     languages = {
         -- You can extend or override language configurations here
         -- See the main plugin file for the full language configuration
     },
-    
+
     -- Fallback to regex if Tree-sitter is unavailable
     fallback_to_regex = true,
 })
 
--- Example keybindings for different providers
-vim.keymap.set("n", "<leader>tc", function()
-    require("comment-tasks").create_task_from_comment()
-end, { desc = "Create task (default provider)" })
+-- Example keybindings
 
 vim.keymap.set("n", "<leader>tcc", function()
-    require("comment-tasks").create_clickup_task_from_comment()
+    require("comment-tasks").create_task_from_comment(nil, "clickup")
 end, { desc = "Create ClickUp task" })
 
 vim.keymap.set("n", "<leader>tcg", function()
-    require("comment-tasks").create_github_task_from_comment()
+    require("comment-tasks").create_task_from_comment(nil, "github")
 end, { desc = "Create GitHub issue" })
 
-vim.keymap.set("n", "<leader>tct", function()
-    require("comment-tasks").create_todoist_task_from_comment()
-end, { desc = "Create Todoist task" })
-
-vim.keymap.set("n", "<leader>tcl", function()
-    require("comment-tasks").create_gitlab_task_from_comment()
-end, { desc = "Create GitLab issue" })
+-- Generic keybindings (use default_provider)
+vim.keymap.set("n", "<leader>tc", function()
+    require("comment-tasks").create_task_from_comment()
+end, { desc = "Create task (default provider)" })
 
 vim.keymap.set("n", "<leader>tx", function()
     require("comment-tasks").close_task_from_comment()
 end, { desc = "Close task" })
 
+vim.keymap.set("n", "<leader>tct", function()
+    require("comment-tasks").create_task_from_comment(nil, "todoist")
+end, { desc = "Create Todoist task" })
+
+vim.keymap.set("n", "<leader>tcl", function()
+    require("comment-tasks").create_task_from_comment(nil, "gitlab")
+end, { desc = "Create GitLab issue" })
+
 vim.keymap.set("n", "<leader>tf", function()
     require("comment-tasks").add_file_to_task_sources()
 end, { desc = "Add file to task" })
 
---[[ 
+--[[
 Environment Variables Setup:
 
 Features:
@@ -135,7 +164,7 @@ Notifications:
 The plugin uses a unified vim.notify system with provider-specific titles:
 
 ✓ Success notifications: "GitHub Success", "Todoist Success", "ClickUp Success"
-⚠ Warning notifications: "GitHub Warning", "Todoist Warning", "ClickUp Warning"  
+⚠ Warning notifications: "GitHub Warning", "Todoist Warning", "ClickUp Warning"
 ✗ Error notifications: "GitHub Error", "Todoist Error", "ClickUp Error"
 ℹ Info notifications: "GitHub Tasks", "Todoist Tasks", "ClickUp Tasks"
 
@@ -151,19 +180,19 @@ Benefits:
 
 2. GitHub:
    export GITHUB_TOKEN="your_github_personal_access_token"
-   
+
    Note: The token needs the following scopes:
    - repo (for private repositories)
    - public_repo (for public repositories)
 
 3. Todoist:
    export TODOIST_API_TOKEN="your_todoist_api_token"
-   
+
    You can get this from: https://todoist.com/prefs/integrations
 
 4. GitLab:
    export GITLAB_TOKEN="your_gitlab_personal_access_token"
-   
+
    You can get this from: GitLab Settings > Access Tokens
    Required scopes: api (for full API access)
    Note: project_id should be the numeric project ID, not the project name
@@ -172,7 +201,7 @@ Usage Examples:
 
 1. Generic commands (use default provider):
    :TaskCreate          - Create task from comment
-   :TaskClose           - Close task from comment  
+   :TaskClose           - Close task from comment
    :TaskAddFile         - Add current file to task
 
 2. Provider-specific commands:
@@ -207,11 +236,11 @@ Supported Comment Formats:
 -- NOTE: This needs optimization
 
 After creating a task, the URL will be added to your comment:
-# TODO: Fix this bug  
+# TODO: Fix this bug
 # https://app.clickup.com/t/task_id
 
 Different providers will have different URL formats:
 - ClickUp: https://app.clickup.com/t/task_id
-- GitHub: https://github.com/owner/repo/issues/123  
+- GitHub: https://github.com/owner/repo/issues/123
 - Todoist: https://todoist.com/showTask?id=task_id
 --]]

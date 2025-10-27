@@ -2,11 +2,17 @@
 
 local M = {}
 
--- Import test modules
 local test_detection = require("comment-tasks.tests.test_detection")
 local test_providers = require("comment-tasks.tests.test_providers")
 local test_config = require("comment-tasks.tests.test_config")
 local test_integration = require("comment-tasks.tests.test_integration")
+
+-- Import new provider tests
+local test_asana_provider = require("comment-tasks.tests.test_asana_provider")
+local test_linear_provider = require("comment-tasks.tests.test_linear_provider")
+local test_jira_provider = require("comment-tasks.tests.test_jira_provider")
+local test_notion_provider = require("comment-tasks.tests.test_notion_provider")
+local test_status_system = require("comment-tasks.tests.test_status_system")
 
 -- Test results tracking
 local results = {
@@ -104,6 +110,13 @@ function M.run_all()
     M.run_test_suite("Detection Tests", test_detection.run_tests)
     M.run_test_suite("Provider Tests", test_providers.run_tests)
     M.run_test_suite("Integration Tests", test_integration.run_tests)
+    
+    -- Run new provider tests
+    M.run_test_suite("Status System Tests", test_status_system.run_tests)
+    M.run_test_suite("Asana Provider Tests", test_asana_provider.run_tests)
+    M.run_test_suite("Linear Provider Tests", test_linear_provider.run_tests)
+    M.run_test_suite("Jira Provider Tests", test_jira_provider.run_tests)
+    M.run_test_suite("Notion Provider Tests", test_notion_provider.run_tests)
 
     -- Print final results
     print("\n" .. string.rep("=", 50))

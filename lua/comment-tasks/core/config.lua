@@ -14,12 +14,12 @@ M.default_config = {
             enabled = true,
             -- Configurable ClickUp statuses
             statuses = {
-                new = "to do",               -- Status for new tasks
-                completed = "complete",      -- Status for completed tasks
-                review = "review",           -- Status for review tasks
-                in_progress = "in progress", -- Status for in-progress tasks
-                -- Custom status mappings can be added by users
-                custom = {}
+                new = "to do",               -- Special: Status for new tasks (creates tasks)
+                completed = "complete",      -- Special: Status for completed tasks (closes tasks)
+                review = "review",           -- Regular status update
+                in_progress = "in progress", -- Regular status update
+                blocked = "blocked",         -- Regular status update
+                testing = "testing"          -- Regular status update
             },
         },
         github = {
@@ -27,16 +27,118 @@ M.default_config = {
             repo_owner = nil,
             repo_name = nil,
             enabled = false,
+            -- GitHub only has open/closed states
+            statuses = {
+                new = "open",        -- Special: Status for new issues (creates issues)
+                completed = "closed" -- Special: Status for completed issues (closes issues)
+            },
         },
         todoist = {
             api_key_env = "TODOIST_API_TOKEN",
             project_id = nil,
             enabled = false,
+            -- Todoist uses complete/incomplete model
+            statuses = {
+                new = "incomplete",  -- Special: Status for new tasks (creates tasks)
+                completed = "complete" -- Special: Status for completed tasks (closes tasks)
+            },
         },
         gitlab = {
             api_key_env = "GITLAB_TOKEN",
             project_id = nil,
             gitlab_url = "https://gitlab.com", -- Can be overridden for self-hosted
+            enabled = false,
+            -- GitLab issue states
+            statuses = {
+                new = "opened",      -- Special: Status for new issues (creates issues)
+                completed = "closed" -- Special: Status for completed issues (closes issues)
+            },
+        },
+        asana = {
+            api_key_env = "ASANA_ACCESS_TOKEN",
+            project_gid = nil,
+            assignee_gid = nil, -- Optional: default assignee for new tasks
+            enabled = false,
+            -- Configurable Asana statuses
+            statuses = {
+                new = "Not Started",         -- Special: Status for new tasks (creates tasks)
+                completed = "Complete",      -- Special: Status for completed tasks (closes tasks)
+                review = "Review",           -- Regular status update
+                in_progress = "In Progress", -- Regular status update
+                blocked = "Blocked"          -- Regular status update
+            },
+        },
+        linear = {
+            api_key_env = "LINEAR_API_KEY",
+            team_id = nil,
+            project_id = nil, -- Optional: specific project
+            assignee_id = nil, -- Optional: default assignee
+            priority = 0, -- 0=none, 1=urgent, 2=high, 3=medium, 4=low
+            enabled = false,
+            -- Configurable Linear statuses - can use names or state IDs
+            statuses = {
+                new = "Todo",                -- Special: Creates issues (name resolution)
+                completed = "Done",          -- Special: Closes issues (name resolution)
+                review = "In Review",        -- Regular status (name resolution)
+                in_progress = "In Progress", -- Regular status (name resolution)
+                backlog = "Backlog",         -- Regular status (name resolution)
+                -- Use # prefix for direct Linear state IDs:
+                -- blocked = "#state_12345", -- Regular status (direct state ID)
+            },
+        },
+        jira = {
+            api_key_env = "JIRA_API_TOKEN",
+            server_url = "https://your-domain.atlassian.net",
+            project_key = nil, -- Required: Jira project key (e.g., "PROJ")
+            issue_type = "Task", -- Default issue type
+            enabled = false,
+            -- Configurable Jira statuses (must match workflow)
+            statuses = {
+                new = "To Do",               -- Special: Status for new issues (creates issues)
+                completed = "Done",          -- Special: Status for completed issues (closes issues)
+                review = "In Review",        -- Regular status update
+                in_progress = "In Progress", -- Regular status update
+                blocked = "Blocked"          -- Regular status update
+            },
+        },
+        notion = {
+            api_key_env = "NOTION_API_KEY",
+            database_id = nil, -- Required: Notion database ID for tasks
+            enabled = false,
+            -- Configurable Notion statuses (must match database status property)
+            statuses = {
+                new = "Not started",         -- Special: Status for new tasks (creates tasks)
+                completed = "Done",          -- Special: Status for completed tasks (closes tasks)
+                review = "In review",        -- Regular status update
+                in_progress = "In progress", -- Regular status update
+                ready = "Ready for review"   -- Regular status update
+            },
+        },
+        monday = {
+            api_key_env = "MONDAY_API_TOKEN",
+            board_id = nil, -- Required: Monday.com board ID
+            group_id = nil, -- Optional: specific group within board
+            enabled = false,
+            -- Configurable Monday.com statuses (must match board status column)
+            statuses = {
+                new = "Not Started",         -- Special: Status for new items (creates items)
+                completed = "Done",          -- Special: Status for completed items (closes items)
+                review = "Review",           -- Regular status update
+                in_progress = "Working on it", -- Regular status update
+                stuck = "Stuck"              -- Regular status update
+            },
+        },
+        trello = {
+            api_key_env = "TRELLO_API_KEY",
+            api_secret_env = "TRELLO_API_SECRET", -- Trello requires both key and secret
+            board_id = nil, -- Required: Trello board ID
+            -- Trello uses lists as statuses
+            statuses = {
+                new = "To Do",        -- Special: List for new cards (creates cards)
+                completed = "Done",   -- Special: List for completed cards (closes cards)
+                in_progress = "Doing", -- Regular status update (moves to list)
+                review = "Review"     -- Regular status update (moves to list)
+            },
             enabled = false,
         },
     },
@@ -375,18 +477,32 @@ function M.get_clickup_status(status_name)
 
     local statuses = clickup_config.statuses
 
-    -- Check predefined statuses first
+    -- Check configured statuses
     if statuses[status_name] then
         return statuses[status_name]
     end
 
-    -- Check custom statuses
-    if statuses.custom and statuses.custom[status_name] then
-        return statuses.custom[status_name]
-    end
-
     -- Return the status name as-is if not found (allows direct status names)
     return status_name
+end
+
+function M.get_provider_available_statuses(provider_name)
+    local provider_config = M.get_provider_config(provider_name)
+    if not provider_config or not provider_config.statuses then
+        -- Default statuses for providers without configuration
+        return {"new", "completed"}
+    end
+
+    local available = {}
+    local statuses = provider_config.statuses
+
+    -- Add all configured statuses
+    for key, _ in pairs(statuses) do
+        table.insert(available, key)
+    end
+
+    table.sort(available)
+    return available
 end
 
 function M.get_clickup_available_statuses()
@@ -398,21 +514,13 @@ function M.get_clickup_available_statuses()
     local available = {}
     local statuses = clickup_config.statuses
 
-    -- Add predefined statuses
+    -- Add all configured statuses
     for key, _ in pairs(statuses) do
-        if key ~= "custom" then
-            table.insert(available, key)
-        end
-    end
-
-    -- Add custom statuses
-    if statuses.custom then
-        for key, _ in pairs(statuses.custom) do
-            table.insert(available, key)
-        end
+        table.insert(available, key)
     end
 
     table.sort(available)
     return available
 end
+
 return M

@@ -11,8 +11,8 @@ GitHubProvider.__index = GitHubProvider
 setmetatable(GitHubProvider, { __index = Provider })
 
 --- Create a new GitHub provider instance
-function GitHubProvider:new(config)
-    local provider = Provider.new(self, config)
+function GitHubProvider:new(provider_config)
+    local provider = Provider.new(self, provider_config)
     return provider
 end
 
@@ -93,12 +93,12 @@ function GitHubProvider:create_task(task_name, filename, callback)
                 end
 
                 local success, response = pcall(vim.fn.json_decode, result.body)
-                if not success then
+                if not success or not response then
                     callback(nil, "Failed to parse JSON response")
                     return
                 end
 
-                if response.html_url then
+                if response and response.html_url then
                     callback(response.html_url, nil)
                 else
                     callback(nil, "No issue URL in response")
@@ -208,7 +208,7 @@ function GitHubProvider:add_file_to_task(issue_number, filename, callback)
                 end
 
                 -- Append files to issue body
-                local updated_body = issue.body or ""
+                local updated_body = (issue and issue.body) or ""
                 local files_section = "\n\n**Source Files:**\n"
                 files_section = files_section .. "- " .. filename .. "\n"
 

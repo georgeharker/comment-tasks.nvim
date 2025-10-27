@@ -11,8 +11,8 @@ GitLabProvider.__index = GitLabProvider
 setmetatable(GitLabProvider, { __index = Provider })
 
 --- Create a new GitLab provider instance
-function GitLabProvider:new(config)
-    local provider = Provider.new(self, config)
+function GitLabProvider:new(provider_config)
+    local provider = Provider.new(self, provider_config)
     return provider
 end
 
@@ -99,7 +99,7 @@ function GitLabProvider:create_task(task_name, filename, callback)
                     return
                 end
 
-                if response.web_url then
+                if response and response.web_url then
                     callback(response.web_url, nil)
                 else
                     callback(nil, "No issue URL in response")
@@ -216,7 +216,7 @@ function GitLabProvider:add_file_to_task(issue_iid, filename, callback)
                 end
 
                 -- Append files to issue description
-                local updated_description = issue.description or ""
+                local updated_description = (issue and issue.description) or ""
                 local files_section = "\n\n**Source Files:**\n"
                 files_section = files_section .. "- " .. filename .. "\n"
 

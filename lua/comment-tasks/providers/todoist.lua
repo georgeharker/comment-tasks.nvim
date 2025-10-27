@@ -11,8 +11,8 @@ TodoistProvider.__index = TodoistProvider
 setmetatable(TodoistProvider, { __index = Provider })
 
 --- Create a new Todoist provider instance
-function TodoistProvider:new(config)
-    local provider = Provider.new(self, config)
+function TodoistProvider:new(provider_config)
+    local provider = Provider.new(self, provider_config)
     return provider
 end
 
@@ -79,12 +79,12 @@ function TodoistProvider:create_task(task_name, filename, callback)
                 end
 
                 local success, response = pcall(vim.fn.json_decode, result.body)
-                if not success then
+                if not success or not response then
                     callback(nil, "Failed to parse JSON response")
                     return
                 end
 
-                if response.id then
+                if response and response.id then
                     local task_url = "https://todoist.com/showTask?id=" .. response.id
                     callback(task_url, nil)
                 else
@@ -167,7 +167,7 @@ function TodoistProvider:add_file_to_task(task_id, filename, callback)
                 end
 
                 -- Append files to task description
-                local updated_description = task.description or ""
+                local updated_description = (task and task.description) or ""
                 local files_section = "\n\nSource Files:\n"
                 files_section = files_section .. "- " .. filename .. "\n"
 

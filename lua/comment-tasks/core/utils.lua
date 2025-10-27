@@ -40,12 +40,40 @@ function M.extract_gitlab_url(line)
     return line:match("(https://gitlab%.com/[%w%-_%.]+/[%w%-_%.]+/%-/issues/[0-9]+)")
 end
 
--- Generic function to extract any supported task URL
+ function M.extract_asana_url(line)
+     return line:match("(https://app%.asana%.com/0/[0-9]+/[0-9]+)")
+ end
+function M.extract_linear_url(line)
+    return line:match("(https://linear%.app/[^/]+/issue/[^/]+/[^%s]*)")
+end
+
+function M.extract_jira_url(line)
+    return line:match("(https://[^/]+%.atlassian%.net/browse/[A-Z]+-[0-9]+)")
+end
+
+function M.extract_notion_url(line)
+    return line:match("(https://[^%s]*notion%.so/[^%s]*[a-f0-9]+[^%s]*)")
+end
+
+function M.extract_monday_url(line)
+    return line:match("(https://[^%s]*monday%.com[^%s]*)")
+end
+
+function M.extract_trello_url(line)
+    return line:match("(https://trello%.com/c/[a-zA-Z0-9]+[^%s]*)")
+end
+
 function M.extract_task_url(line)
     return M.extract_clickup_url(line) or
            M.extract_github_url(line) or
            M.extract_todoist_url(line) or
-           M.extract_gitlab_url(line)
+           M.extract_gitlab_url(line) or
+           M.extract_asana_url(line) or
+           M.extract_linear_url(line) or
+           M.extract_jira_url(line) or
+           M.extract_notion_url(line) or
+           M.extract_monday_url(line) or
+           M.extract_trello_url(line)
 end
 
 -- Function to get provider name from URL
@@ -184,6 +212,82 @@ function M.create_command_handler(func)
     return function(opts)
         local lang_override = opts.args and opts.args ~= "" and opts.args or nil
         func(lang_override)
+    end
+end
+
+-- Create a dynamic command handler for any provider based on configured statuses
+function M.create_provider_command_handler(provider_name, create_task_fn, update_status_fn, add_file_fn)
+    return function(opts)
+        local args = {}
+        if opts.args and opts.args ~= "" then
+            args = vim.split(vim.trim(opts.args), "%s+")
+        end
+
+        -- If no arguments, default to "new" action
+        if #args == 0 then
+            create_task_fn(nil) -- No language override
+            return
+        end
+
+        local first_arg = args[1]
+        local second_arg = args[2]
+
+        -- Get available statuses for this provider
+        local config = require("comment-tasks.core.config")
+        local available_statuses = config.get_provider_available_statuses(provider_name)
+
+        -- Handle special commands
+        if first_arg == "addfile" then
+            add_file_fn(second_arg)
+            return
+        end
+
+        -- Handle special commands: create and close
+        if first_arg == "create" then
+            create_task_fn(second_arg)
+            return
+        end
+
+        if first_arg == "close" then
+            -- Use the completed status for closing
+            update_status_fn("completed", second_arg)
+            return
+        end
+
+        -- Check if first argument is an available status
+        for _, status in ipairs(available_statuses) do
+            if first_arg == status then
+                if status == "new" then
+                    -- Special case: "new" status creates a task
+                    create_task_fn(second_arg)
+                else
+                    -- All other statuses update task status
+                    update_status_fn(status, second_arg)
+                end
+                return
+            end
+        end
+
+        -- If not found in configured statuses, treat as custom status
+        update_status_fn(first_arg, second_arg)
+    end
+end
+
+function M.create_provider_completion(provider_name, _)
+    return function()
+        local config = require("comment-tasks.core.config")
+        local available_statuses = config.get_provider_available_statuses(provider_name)
+
+        -- Add addfile command
+        local completions = {"addfile"}
+
+        -- Add all configured statuses
+        for _, status in ipairs(available_statuses) do
+            table.insert(completions, status)
+        end
+
+        table.sort(completions)
+        return completions
     end
 end
 

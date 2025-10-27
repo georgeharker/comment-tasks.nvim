@@ -461,6 +461,33 @@ describe("Comment Tasks Neovim Integration", function()
             assert.is_not_nil(main_plugin.create_todoist_task_from_comment)
             assert.is_not_nil(main_plugin.create_gitlab_task_from_comment)
         end)
+
+        it("close_task_from_comment should call update_task_status_from_comment with completed", function()
+            local main_plugin = require("comment-tasks")
+            
+            -- Mock the update_task_status_from_comment function
+            local original_update = main_plugin.update_task_status_from_comment
+            local called_with_status = nil
+            local called_with_lang = nil  
+            local called_with_provider = nil
+            
+            main_plugin.update_task_status_from_comment = function(status, lang_override, provider_name)
+                called_with_status = status
+                called_with_lang = lang_override
+                called_with_provider = provider_name
+            end
+            
+            -- Call close_task_from_comment
+            main_plugin.close_task_from_comment("lua", "github")
+            
+            -- Verify it called update with "completed" status
+            assert.equals("completed", called_with_status)
+            assert.equals("lua", called_with_lang)
+            assert.equals("github", called_with_provider)
+            
+            -- Restore original function
+            main_plugin.update_task_status_from_comment = original_update
+        end)
     end)
 end)
 
