@@ -1,9 +1,4 @@
 # ClickUp Integration
-## Setup
-# ClickUp Integration
-
-## Setup
-# ClickUp Integration
 
 ## Setup
 
