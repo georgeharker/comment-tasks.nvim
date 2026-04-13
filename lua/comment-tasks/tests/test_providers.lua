@@ -1,10 +1,5 @@
--- Provider tests using plenary
+-- Provider tests
 
--- Import plenary test functions
-local plenary = require("plenary.busted")
-local describe = plenary.describe
-local it = plenary.it
-local before_each = plenary.before_each
 local assert = require("luassert")
 
 describe("comment-tasks providers", function()

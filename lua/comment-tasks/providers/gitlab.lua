@@ -1,7 +1,7 @@
 -- GitLab provider for comment-tasks plugin
 
 local interface = require("comment-tasks.providers.interface")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -72,7 +72,7 @@ function GitLabProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(issue_data)
     local api_url = self:get_api_base_url() .. "/projects/" .. self.config.project_id .. "/issues"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -147,7 +147,7 @@ function GitLabProvider:update_task_status(issue_iid, status, callback)
     local json_data = vim.fn.json_encode(issue_data)
     local api_url = self:get_api_base_url() .. "/projects/" .. self.config.project_id .. "/issues/" .. issue_iid
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "put",
         headers = {
@@ -196,7 +196,7 @@ function GitLabProvider:add_file_to_task(issue_iid, filename, callback)
     -- Get current issue to append to existing description
     local get_url = self:get_api_base_url() .. "/projects/" .. self.config.project_id .. "/issues/" .. issue_iid
 
-    curl.request({
+    http.request({
         url = get_url,
         method = "get",
         headers = {
@@ -232,7 +232,7 @@ function GitLabProvider:add_file_to_task(issue_iid, filename, callback)
                 local update_data = { description = updated_description }
                 local json_data = vim.fn.json_encode(update_data)
 
-                curl.request({
+                http.request({
                     url = get_url,
                     method = "put",
                     headers = {
@@ -301,7 +301,7 @@ function GitLabProvider:add_note_to_issue(issue_iid, note_body, callback)
     local json_data = vim.fn.json_encode(note_data)
     local api_url = self:get_api_base_url() .. "/projects/" .. self.config.project_id .. "/issues/" .. issue_iid .. "/notes"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -349,7 +349,7 @@ function GitLabProvider:get_issue(issue_iid, callback)
 
     local api_url = self:get_api_base_url() .. "/projects/" .. self.config.project_id .. "/issues/" .. issue_iid
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "get",
         headers = {

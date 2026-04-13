@@ -1,6 +1,6 @@
 -- Trello provider for comment-tasks plugin
 
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 local interface = require("comment-tasks.providers.interface")
 
 ---@type Provider
@@ -108,7 +108,7 @@ function TrelloProvider:create_task(task_name, filename, callback)
         local lists_url = "https://api.trello.com/1/boards/" .. self.config.board_id .. "/lists"
         local lists_params = "key=" .. api_key .. "&token=" .. api_token
 
-        curl.request({
+        http.request({
             url = lists_url .. "?" .. lists_params,
             method = "get",
             callback = function(lists_result)
@@ -185,7 +185,7 @@ function TrelloProvider:create_card_in_list(
     end
     local params_string = table.concat(param_strings, "&")
 
-    curl.request({
+    http.request({
         url = "https://api.trello.com/1/cards",
         method = "post",
         headers = {
@@ -248,7 +248,7 @@ function TrelloProvider:update_task_status(card_id, status, callback)
         local lists_url = "https://api.trello.com/1/boards/" .. self.config.board_id .. "/lists"
         local lists_params = "key=" .. api_key .. "&token=" .. api_token
 
-        curl.request({
+        http.request({
             url = lists_url .. "?" .. lists_params,
             method = "get",
             callback = function(lists_result)
@@ -305,7 +305,7 @@ function TrelloProvider:move_card_to_list(card_id, list_id, api_key, api_token, 
     end
     local params_string = table.concat(param_strings, "&")
 
-    curl.request({
+    http.request({
         url = "https://api.trello.com/1/cards/" .. card_id,
         method = "put",
         headers = {
@@ -341,7 +341,7 @@ function TrelloProvider:add_file_to_task(card_id, filename, callback)
     -- Get current card to append to existing description
     local get_params = "key=" .. api_key .. "&token=" .. api_token .. "&fields=desc"
 
-    curl.request({
+    http.request({
         url = "https://api.trello.com/1/cards/" .. card_id .. "?" .. get_params,
         method = "get",
         callback = function(get_result)
@@ -384,7 +384,7 @@ function TrelloProvider:add_file_to_task(card_id, filename, callback)
                 end
                 local params_string = table.concat(param_strings, "&")
 
-                curl.request({
+                http.request({
                     url = "https://api.trello.com/1/cards/" .. card_id,
                     method = "put",
                     headers = {

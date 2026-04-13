@@ -1,19 +1,5 @@
--- Neovim integration tests using plenary test framework
+-- Neovim integration tests
 
-local M = {}
-
--- Use plenary test framework if available
-local has_plenary, plenary = pcall(require, "plenary.busted")
-
-if not has_plenary then
-    print("Plenary not available - skipping Neovim integration tests")
-    return M
-end
-
--- Import plenary test functions
-local describe = plenary.describe
-local it = plenary.it
-local before_each = plenary.before_each
 local assert = require("luassert")
 
 -- Test helper functions
@@ -27,7 +13,7 @@ end
 local function setup_test_environment()
     -- Mock environment variables
     vim.env.CLICKUP_API_KEY = "test_clickup_key"
-            vim.env.GITHUB_TOKEN = "test_github_token"
+    vim.env.GITHUB_TOKEN = "test_github_token"
     vim.env.TODOIST_API_KEY = "test_todoist_token"
     vim.env.GITLAB_API_KEY = "test_gitlab_token"
 
@@ -57,8 +43,8 @@ local function setup_test_environment()
 end
 
 local function mock_http_requests()
-    -- Mock plenary.curl for testing
-    package.loaded["plenary.curl"] = {
+    -- Mock comment-tasks.core.http for testing
+    package.loaded["comment-tasks.core.http"] = {
         request = function(opts)
             local callback = opts.callback
             local url = opts.url
@@ -98,7 +84,7 @@ local function mock_http_requests()
     }
 end
 
--- Test suite using plenary describe/it
+-- Test suite
 describe("Comment Tasks Neovim Integration", function()
     before_each(function()
         setup_test_environment()
@@ -490,16 +476,3 @@ describe("Comment Tasks Neovim Integration", function()
         end)
     end)
 end)
-
-function M.run_tests()
-    if has_plenary then
-        print("Running Neovim integration tests with plenary...")
-        -- The tests will run automatically when this file is loaded by plenary
-        return true
-    else
-        print("Plenary not available - run with :PlenaryBustedFile to execute these tests")
-        return false
-    end
-end
-
-return M

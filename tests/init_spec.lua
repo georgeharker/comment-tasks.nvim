@@ -1,27 +1,20 @@
--- Main plugin initialization tests using plenary test harness
+-- Main plugin initialization tests
 
--- Import plenary test functions
-local plenary = require("plenary.busted")
-local describe = plenary.describe
-local it = plenary.it
-local before_each = plenary.before_each
 local assert = require("luassert")
 
--- Mock plenary.curl for testing
-package.preload["plenary.curl"] = function()
-    return {
-        request = function(opts)
-            local response = {
-                status = 200,
-                body = '{"id": "test_123", "url": "https://example.com/task/123"}'
-            }
-            if opts.callback then
-                vim.schedule(function() opts.callback(response) end)
-            end
-            return response
+-- Mock comment-tasks.core.http for testing
+package.loaded["comment-tasks.core.http"] = {
+    request = function(opts)
+        local response = {
+            status = 200,
+            body = '{"id": "test_123", "url": "https://example.com/task/123"}'
+        }
+        if opts.callback then
+            vim.schedule(function() opts.callback(response) end)
         end
-    }
-end
+        return response
+    end
+}
 
 describe("comment-tasks plugin initialization", function()
     before_each(function()

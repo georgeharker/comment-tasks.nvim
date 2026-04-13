@@ -130,6 +130,7 @@ end
 
 -- Function to check if current buffer language is supported
 function M.is_supported_language(lang_override, languages_config)
+    assert(languages_config, "languages_config must not be nil — caller should pass config.get_effective_config().languages")
     local lang = lang_override or vim.bo.filetype
     return languages_config[lang] ~= nil
 end

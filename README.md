@@ -49,9 +49,6 @@ Works with 15+ programming languages including:
 ```lua
 {
     "georgeharker/comment-tasks.nvim",
-    dependencies = {
-        "nvim-lua/plenary.nvim", -- Required for HTTP requests
-    },
     config = function()
         require("comment-tasks").setup({
             default_provider = "clickup", -- Choose your preferred provider
@@ -200,6 +197,48 @@ statuses = {
 ```
 
 📖 **Complete Configuration**: [docs/configuration.md](docs/configuration.md)
+
+## 📁 Project-Level Configuration
+
+Override provider settings per-project by placing a `.comment-tasks.json` file at your project root. This lets different repositories target different task lists, boards, or projects without changing your personal Neovim config.
+
+### How Root Detection Works
+
+When a command runs, the plugin walks upward from the current file's directory:
+
+1. `.comment-tasks.json` is checked first at every level — if found, that directory is the project root
+2. Root markers (`.git`, `pyproject.toml`, `package.json`, etc.) act as a ceiling
+3. If no marker is found, falls back to git worktree detection
+
+This means `.comment-tasks.json` always wins as the root anchor, even if it lives in a subdirectory above nested `package.json` files.
+
+### Example `.comment-tasks.json`
+
+```json
+{
+    "default_provider": "clickup",
+    "providers": {
+        "clickup": { "list_id": "9012345678", "team_id": "1234567" },
+        "github":  { "repo_owner": "acme-corp", "repo_name": "backend-api" },
+        "jira":    { "project_key": "BACKEND", "server_url": "https://acme.atlassian.net" }
+    }
+}
+```
+
+Only project-targeting fields are overridden (list IDs, project keys, etc.). API keys and `enabled` flags always come from your Neovim config — they are never read from the project file.
+
+### Customising Root Markers
+
+The default root markers cover most ecosystems. Override them in `setup()`:
+
+```lua
+require("comment-tasks").setup({
+    root_markers = { ".git", "pyproject.toml", "Cargo.toml", ".my-marker" },
+    -- ...
+})
+```
+
+📖 **Full details**: [docs/configuration.md](docs/configuration.md)
 
 ## 📚 Documentation
 

@@ -1,7 +1,7 @@
 -- GitHub provider for comment-tasks plugin
 
 local interface = require("comment-tasks.providers.interface")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -69,7 +69,7 @@ function GitHubProvider:create_task(task_name, filename, callback)
                    self.config.repo_owner .. "/" ..
                    self.config.repo_name .. "/issues"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -133,7 +133,7 @@ function GitHubProvider:update_task_status(issue_number, status, callback)
                    self.config.repo_owner .. "/" ..
                    self.config.repo_name .. "/issues/" .. issue_number
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "patch",
         headers = {
@@ -186,7 +186,7 @@ function GitHubProvider:add_file_to_task(issue_number, filename, callback)
                    self.config.repo_owner .. "/" ..
                    self.config.repo_name .. "/issues/" .. issue_number
 
-    curl.request({
+    http.request({
         url = get_url,
         method = "get",
         headers = {
@@ -224,7 +224,7 @@ function GitHubProvider:add_file_to_task(issue_number, filename, callback)
                 local update_data = { body = updated_body }
                 local json_data = vim.fn.json_encode(update_data)
 
-                curl.request({
+                http.request({
                     url = get_url,
                     method = "patch",
                     headers = {

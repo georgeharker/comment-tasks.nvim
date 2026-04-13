@@ -1,7 +1,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local config = require("comment-tasks.core.config")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -74,7 +74,7 @@ function AsanaProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(task_data)
     local api_url = "https://app.asana.com/api/1.0/tasks"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -160,7 +160,7 @@ function AsanaProvider:update_task_status(task_gid, status, callback)
     local json_data = vim.fn.json_encode(update_data)
     local api_url = "https://app.asana.com/api/1.0/tasks/" .. task_gid
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "put",
         headers = {
@@ -199,7 +199,7 @@ function AsanaProvider:add_file_to_task(task_gid, filename, callback)
     -- Get current task to append to existing notes
     local get_url = "https://app.asana.com/api/1.0/tasks/" .. task_gid .. "?opt_fields=notes"
 
-    curl.request({
+    http.request({
         url = get_url,
         method = "get",
         headers = {
@@ -241,7 +241,7 @@ function AsanaProvider:add_file_to_task(task_gid, filename, callback)
                 }
                 local json_data = vim.fn.json_encode(update_data)
 
-                curl.request({
+                http.request({
                     url = "https://app.asana.com/api/1.0/tasks/" .. task_gid,
                     method = "put",
                     headers = {

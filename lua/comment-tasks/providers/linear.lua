@@ -1,7 +1,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local config = require("comment-tasks.core.config")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -97,7 +97,7 @@ function LinearProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(request_data)
     local api_url = "https://api.linear.app/graphql"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -191,7 +191,7 @@ function LinearProvider:update_task_status(issue_id, status, callback)
 
     local json_data = vim.fn.json_encode(request_data)
 
-    curl.request({
+    http.request({
         url = "https://api.linear.app/graphql",
         method = "post",
         headers = {
@@ -271,7 +271,7 @@ function LinearProvider:add_file_to_task(issue_id, filename, callback)
         variables = variables
     }
 
-    curl.request({
+    http.request({
         url = "https://api.linear.app/graphql",
         method = "post",
         headers = {
@@ -328,7 +328,7 @@ function LinearProvider:add_file_to_task(issue_id, filename, callback)
                     variables = update_variables
                 }
 
-                curl.request({
+                http.request({
                     url = "https://api.linear.app/graphql",
                     method = "post",
                     headers = {

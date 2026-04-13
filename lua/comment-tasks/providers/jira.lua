@@ -1,7 +1,7 @@
 -- Jira provider for comment-tasks plugin
 
 local interface = require("comment-tasks.providers.interface")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -142,7 +142,7 @@ function JiraProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(issue_data)
     local api_url = self:get_base_url() .. "/issue"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -204,7 +204,7 @@ function JiraProvider:update_task_status(issue_key, status, callback)
     -- Get available transitions for the issue
     local transitions_url = self:get_base_url() .. "/issue/" .. issue_key .. "/transitions"
 
-    curl.request({
+    http.request({
         url = transitions_url,
         method = "get",
         headers = {
@@ -249,7 +249,7 @@ function JiraProvider:update_task_status(issue_key, status, callback)
                     }
                 }
 
-                curl.request({
+                http.request({
                     url = transitions_url,
                     method = "post",
                     headers = {
@@ -284,7 +284,7 @@ function JiraProvider:add_file_to_task(issue_key, filename, callback)
     -- Get current issue to append to existing description
     local get_url = self:get_base_url() .. "/issue/" .. issue_key .. "?fields=description"
 
-    curl.request({
+    http.request({
         url = get_url,
         method = "get",
         headers = {
@@ -371,7 +371,7 @@ function JiraProvider:add_file_to_task(issue_key, filename, callback)
                     }
                 }
 
-                curl.request({
+                http.request({
                     url = self:get_base_url() .. "/issue/" .. issue_key,
                     method = "put",
                     headers = {

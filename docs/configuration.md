@@ -365,32 +365,118 @@ providers = {
 
 ## Advanced Configuration
 
-### Multi-Environment Setup
+### Project-Level Configuration (`.comment-tasks.json`)
 
-Different configurations for different projects:
+Instead of switching configs based on `getcwd()`, place a `.comment-tasks.json`
+file at your project root. The plugin finds it automatically and applies
+overrides for the duration of each command — your Neovim config is never
+mutated.
+
+#### How root detection works
+
+When a command runs, the plugin walks upward from the current file's directory:
+
+1. **`.comment-tasks.json` is checked first** at every ancestor directory. If
+   found, that directory is the project root.
+2. **Root markers** (`.git`, `pyproject.toml`, `package.json`, etc.) act as a
+   ceiling — the first one found becomes the root.
+3. Falls back to **git worktree detection** (supports `.git` files used by
+   `git worktree`).
+
+`.comment-tasks.json` always takes priority. If your repo has nested
+`package.json` files in subdirectories, the config file higher up still wins.
+
+#### Config layering
+
+```
+M.default_config           — built-in defaults, never mutated
+    ↓ merged at setup()
+M.config                   — your Neovim config (permanent after setup)
+    ↓ deep-copied per command invocation
+effective_config           — ephemeral, includes .comment-tasks.json overrides
+```
+
+`M.config` is never touched after `setup()`. A fresh deep copy is made for
+each command, project overrides applied, then discarded.
+
+#### Example `.comment-tasks.json`
+
+```json
+{
+    "default_provider": "clickup",
+    "providers": {
+        "clickup": {
+            "list_id": "9012345678",
+            "team_id": "1234567"
+        },
+        "github": {
+            "repo_owner": "acme-corp",
+            "repo_name": "backend-api"
+        },
+        "jira": {
+            "project_key": "BACKEND",
+            "server_url": "https://acme.atlassian.net"
+        }
+    }
+}
+```
+
+Only the fields you include are overridden. Absent fields fall through to your
+Neovim config.
+
+#### Override allowlist
+
+For safety, only project-targeting fields can be overridden per-project. API
+keys and the `enabled` flag are never read from the project file:
+
+| Provider | Overridable fields |
+|----------|--------------------|
+| ClickUp  | `list_id`, `team_id` |
+| GitHub   | `repo_owner`, `repo_name` |
+| GitLab   | `project_id`, `gitlab_url` |
+| Jira     | `project_key`, `server_url` |
+| Linear   | `team_id`, `project_id` |
+| Asana    | `project_gid`, `assignee_gid` |
+| Todoist  | `project_id` |
+| Notion   | `database_id` |
+| Trello   | `list_id` |
+| Monday   | `board_id` |
+
+### Root Markers
+
+Root markers define the project boundary — the ceiling for the upward search.
+`.comment-tasks.json` is **not** a root marker; it is always checked
+independently at every directory level during the walk-up, so it does not
+need to appear in this list.
+
+The default markers cover most ecosystems:
+
+```
+.git, pyproject.toml, setup.py, setup.cfg, Pipfile, package.json,
+Cargo.toml, go.mod, Gemfile, pom.xml, build.gradle, build.gradle.kts,
+CMakeLists.txt, *.sln, *.csproj, .editorconfig
+```
+
+Override or replace the list in `setup()`:
 
 ```lua
--- Project A configuration
-if vim.fn.getcwd():match("project%-a") then
-    require("comment-tasks").setup({
-        default_provider = "github",
-        providers = {
-            github = {
-                enabled = true,
-                repo_owner = "company",
-                repo_name = "project-a"
-            }
-        }
-    })
-else
-    -- Default configuration for other projects
-    require("comment-tasks").setup({
-        default_provider = "clickup", 
-        providers = {
-            clickup = { /* ClickUp config */ }
-        }
-    })
-end
+require("comment-tasks").setup({
+    -- Replace the entire list
+    root_markers = { ".git", "pyproject.toml", "Cargo.toml" },
+    -- ...
+})
+```
+
+To extend the defaults, copy them and append:
+
+```lua
+local defaults = require("comment-tasks.core.config").default_config.root_markers
+local my_markers = vim.deepcopy(defaults)
+table.insert(my_markers, ".my-custom-root-file")
+
+require("comment-tasks").setup({
+    root_markers = my_markers,
+})
 ```
 
 ### Conditional Provider Loading

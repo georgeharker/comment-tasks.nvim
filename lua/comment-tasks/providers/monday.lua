@@ -2,7 +2,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local config = require("comment-tasks.core.config")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -110,7 +110,7 @@ function MondayProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(request_data)
     local api_url = "https://api.monday.com/v2"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -201,7 +201,7 @@ function MondayProvider:update_task_status(item_id, status, callback)
 
     local json_data = vim.fn.json_encode(request_data)
 
-    curl.request({
+    http.request({
         url = "https://api.monday.com/v2",
         method = "post",
         headers = {
@@ -275,7 +275,7 @@ function MondayProvider:add_file_to_task(item_id, filename, callback)
         variables = variables
     }
 
-    curl.request({
+    http.request({
         url = "https://api.monday.com/v2",
         method = "post",
         headers = {
@@ -342,7 +342,7 @@ function MondayProvider:add_file_to_task(item_id, filename, callback)
                     variables = update_variables
                 }
 
-                curl.request({
+                http.request({
                     url = "https://api.monday.com/v2",
                     method = "post",
                     headers = {

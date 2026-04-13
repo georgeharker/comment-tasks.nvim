@@ -1,10 +1,5 @@
--- Language-specific comment detection tests using plenary
+-- Language-specific comment detection tests
 
--- Import plenary test functions
-local plenary = require("plenary.busted")
-local describe = plenary.describe
-local it = plenary.it
-local before_each = plenary.before_each
 local assert = require("luassert")
 
 describe("language-specific comment detection", function()

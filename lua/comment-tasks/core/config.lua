@@ -368,6 +368,49 @@ M.default_config = {
 
     -- Fallback to regex patterns if Tree-sitter is unavailable
     fallback_to_regex = true,
+
+    -- Root marker files/directories used to locate the project root.
+    -- .comment-tasks.json is always checked separately at every directory
+    -- level during the walk-up — it does not need to be in this list.
+    -- The first ancestor directory that contains any of these entries wins.
+    -- Override or extend this list in your setup() call.
+    root_markers = {
+        -- Version control
+        ".git",
+
+        -- Python
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "Pipfile",
+
+        -- JavaScript / TypeScript / Node
+        "package.json",
+
+        -- Rust
+        "Cargo.toml",
+
+        -- Go
+        "go.mod",
+
+        -- Ruby
+        "Gemfile",
+
+        -- Java / Kotlin / Gradle / Maven
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+
+        -- C / C++ / CMake
+        "CMakeLists.txt",
+
+        -- .NET
+        "*.sln",
+        "*.csproj",
+
+        -- Generic
+        ".editorconfig",
+    },
 }
 
 -- Current configuration (will be merged with user config)
@@ -521,6 +564,144 @@ function M.get_clickup_available_statuses()
 
     table.sort(available)
     return available
+end
+
+-- Per-provider canonical status names used as defaults when no custom
+-- statuses are configured.  Rather than maintaining a separate table,
+-- we read directly from M.default_config.providers[name].statuses —
+-- the single source of truth.
+
+--- Resolve a generic status name to the provider-specific string.
+---
+--- Resolution order:
+---   1. Top-level key in provider's configured statuses table
+---   2. Key inside provider's configured statuses.custom sub-table
+---   3. Built-in default statuses from M.default_config
+---   4. The status name unchanged
+---
+---@param provider_name string
+---@param status_name   string
+---@return string
+function M.get_provider_status(provider_name, status_name)
+    local provider_config = M.get_provider_config(provider_name)
+
+    if provider_config and provider_config.statuses then
+        local statuses = provider_config.statuses
+
+        -- 1. Direct key in configured statuses
+        if statuses[status_name] then
+            return statuses[status_name]
+        end
+
+        -- 2. Key inside statuses.custom sub-table
+        if type(statuses.custom) == "table" and statuses.custom[status_name] then
+            return statuses.custom[status_name]
+        end
+    end
+
+    -- 3. Built-in default statuses
+    local default_provider = M.default_config.providers[provider_name]
+    if default_provider and default_provider.statuses
+            and default_provider.statuses[status_name] then
+        return default_provider.statuses[status_name]
+    end
+
+    -- 4. Return as-is
+    return status_name
+end
+
+--- Return the fallback/default status string for a provider.
+---
+--- Checks the built-in default statuses first; if the status is not found
+--- there, capitalises the first letter of status_name and returns that.
+---
+---@param provider_name string
+---@param status_name   string
+---@return string
+function M.get_fallback_status(provider_name, status_name)
+    local default_provider = M.default_config.providers[provider_name]
+    if default_provider and default_provider.statuses
+            and default_provider.statuses[status_name] then
+        return default_provider.statuses[status_name]
+    end
+
+    -- Capitalise first letter as a last resort
+    return status_name:sub(1, 1):upper() .. status_name:sub(2)
+end
+
+-- ---------------------------------------------------------------------------
+-- Project-level config (.comment-tasks.json)
+-- ---------------------------------------------------------------------------
+
+-- Fields each provider exposes as project-level overrides.
+-- API keys and the enabled flag are intentionally absent — they belong in the
+-- personal Neovim config only.
+local PROJECT_OVERRIDE_FIELDS = {
+    clickup = { "list_id", "team_id" },
+    github  = { "repo_owner", "repo_name" },
+    gitlab  = { "project_id", "gitlab_url" },
+    jira    = { "project_key", "server_url" },
+    linear  = { "team_id", "project_id" },
+    asana   = { "project_gid", "assignee_gid" },
+    todoist = { "project_id" },
+    notion  = { "database_id" },
+    trello  = { "list_id" },
+    monday  = { "board_id" },
+}
+
+--- Apply project-file overrides onto an already-deep-copied config table.
+--- Only the fields in PROJECT_OVERRIDE_FIELDS are written; nothing else.
+--- This function mutates `effective` — callers must pass a copy, never M.config.
+---
+---@param effective table  Deep copy of M.config — will be mutated
+---@param project_cfg table  Parsed .comment-tasks.json
+local function apply_project_overrides(effective, project_cfg)
+    if project_cfg.default_provider then
+        effective.default_provider = project_cfg.default_provider
+    end
+
+    local overrides = project_cfg.providers
+    if type(overrides) ~= "table" then
+        return
+    end
+
+    for provider_name, values in pairs(overrides) do
+        local allowed = PROJECT_OVERRIDE_FIELDS[provider_name]
+        local target  = effective.providers and effective.providers[provider_name]
+        if allowed and target and type(values) == "table" then
+            for _, field in ipairs(allowed) do
+                if values[field] ~= nil then
+                    target[field] = values[field]
+                end
+            end
+        end
+    end
+end
+
+--- Return an ephemeral config table for the current command invocation.
+---
+--- This is M.config deep-copied, then overridden with any .comment-tasks.json
+--- found by walking up from the current buffer's directory to a git root.
+--- M.config is never mutated.  No caching — called fresh each invocation.
+---
+---@return table  Effective config (safe to pass around and discard)
+function M.get_effective_config()
+    local effective = vim.tbl_deep_extend("force", {}, M.config)
+
+    local project = require("comment-tasks.core.project")
+    local project_cfg, err = project.load_for_current_buffer()
+
+    if err then
+        -- Warn but continue with unmodified copy of M.config
+        vim.notify(
+            "[comment-tasks] project config error: " .. err,
+            vim.log.levels.WARN
+        )
+    elseif project_cfg then
+        apply_project_overrides(effective, project_cfg)
+    end
+
+    return effective
 end
 
 return M

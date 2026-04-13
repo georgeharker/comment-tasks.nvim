@@ -19,45 +19,46 @@ require("comment-tasks.providers.notion")
 require("comment-tasks.providers.monday")
 require("comment-tasks.providers.trello")
 
--- Provider instances cache
-local provider_instances = {}
-
--- Get or create provider instance
-local function get_provider_instance(provider_name)
-    if not provider_instances[provider_name] then
-        local provider_config = config.get_provider_config(provider_name)
-        if provider_config then
-            local provider, error = interface.create_provider(provider_name, provider_config)
-            if provider then
-                provider_instances[provider_name] = provider
-            else
-                utils.notify_error("Failed to create provider '" .. provider_name .. "': " .. (error or "unknown error"))
-                return nil
-            end
-        else
-            utils.notify_error("No configuration found for provider: " .. provider_name)
-            return nil
-        end
+-- Get a fresh provider instance from the given effective config.
+-- No caching — called per command invocation so project overrides take effect.
+local function get_provider_instance(provider_name, effective_config)
+    local provider_config = effective_config.providers
+        and effective_config.providers[provider_name]
+    if not provider_config or not provider_config.enabled then
+        return nil
     end
-    return provider_instances[provider_name]
+    local provider, err = interface.create_provider(provider_name, provider_config)
+    if not provider then
+        utils.notify_error(
+            "Failed to create provider '" .. provider_name .. "': "
+                .. (err or "unknown error")
+        )
+    end
+    return provider
 end
 
--- Get provider from URL
-local function get_provider_from_url(url)
+-- Get the first enabled provider that matches a URL.
+local function get_provider_from_url(url, effective_config)
     for _, provider_name in ipairs(interface.get_provider_names()) do
-        local provider = get_provider_instance(provider_name)
-        if provider and provider:matches_url(url) then
-            return provider
+        local pc = effective_config.providers
+            and effective_config.providers[provider_name]
+        if pc and pc.enabled then
+            local provider = get_provider_instance(provider_name, effective_config)
+            if provider and provider:matches_url(url) then
+                return provider
+            end
         end
     end
     return nil
 end
 
 -- Show task creation dialog
-local function show_task_dialog_for_block(initial_text, comment_info, filename, provider_name)
-    provider_name = provider_name or config.get_config().default_provider
+local function show_task_dialog_for_block(
+    initial_text, comment_info, filename, provider_name, effective_config
+)
+    provider_name = provider_name or effective_config.default_provider
 
-    local provider = get_provider_instance(provider_name)
+    local provider = get_provider_instance(provider_name, effective_config)
     if not provider then
         return
     end
@@ -100,15 +101,16 @@ end
 
 -- Create task from comment (main function)
 function M.create_task_from_comment(lang_override, provider_name)
-    provider_name = provider_name or config.get_config().default_provider
-    local current_config = config.get_config()
+    local current_config = config.get_effective_config()
+    provider_name = provider_name or current_config.default_provider
 
     if not utils.check_language_supported(lang_override, current_config.languages, provider_name) then
         return
     end
 
-    -- Check if provider is enabled
-    if not config.is_provider_enabled(provider_name) then
+    -- Check if provider is enabled in the effective config
+    local pc = current_config.providers and current_config.providers[provider_name]
+    if not pc or not pc.enabled then
         utils.notify_error("Provider " .. provider_name .. " is not enabled")
         return
     end
@@ -143,20 +145,21 @@ function M.create_task_from_comment(lang_override, provider_name)
         return
     end
 
-    show_task_dialog_for_block(comment_content, comment_info, filename, provider_name)
+    show_task_dialog_for_block(comment_content, comment_info, filename, provider_name, current_config)
 end
 
 function M.update_task_status_from_comment(status, lang_override, _)
 
-    if not utils.check_language_supported(lang_override, config.languages) then
+    local current_config = config.get_effective_config()
+    if not utils.check_language_supported(lang_override, current_config.languages) then
         return
     end
 
     -- Try to find a comment using generalized detection
     local comment_info = detection.get_comment_info(
         lang_override,
-        config.languages,
-        config.fallback_to_regex
+        current_config.languages,
+        current_config.fallback_to_regex
     )
 
     if not comment_info then
@@ -173,7 +176,7 @@ function M.update_task_status_from_comment(status, lang_override, _)
     end
 
     -- Get provider for this URL
-    local provider = get_provider_from_url(task_url)
+    local provider = get_provider_from_url(task_url, current_config)
     if not provider then
         utils.notify_error("No provider found for URL: " .. task_url)
         return
@@ -205,7 +208,8 @@ end
 
 function M.add_file_to_task_sources(lang_override, _)
 
-    if not utils.check_language_supported(lang_override, config.languages) then
+    local current_config = config.get_effective_config()
+    if not utils.check_language_supported(lang_override, current_config.languages) then
         return
     end
 
@@ -219,8 +223,8 @@ function M.add_file_to_task_sources(lang_override, _)
     -- Try to find a comment using generalized detection
     local comment_info = detection.get_comment_info(
         lang_override,
-        config.languages,
-        config.fallback_to_regex
+        current_config.languages,
+        current_config.fallback_to_regex
     )
 
     if not comment_info then
@@ -237,7 +241,7 @@ function M.add_file_to_task_sources(lang_override, _)
     end
 
     -- Get provider for this URL
-    local provider = get_provider_from_url(task_url)
+    local provider = get_provider_from_url(task_url, current_config)
     if not provider then
         utils.notify_error("No provider found for URL: " .. task_url)
         return

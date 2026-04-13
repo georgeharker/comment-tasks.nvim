@@ -1,7 +1,7 @@
 -- Todoist provider for comment-tasks plugin
 
 local interface = require("comment-tasks.providers.interface")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -57,7 +57,7 @@ function TodoistProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(task_data)
     local api_url = "https://api.todoist.com/rest/v2/tasks"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -111,7 +111,7 @@ function TodoistProvider:update_task_status(task_id, status, callback)
 
     local api_url = "https://api.todoist.com/rest/v2/tasks/" .. task_id .. "/close"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -147,7 +147,7 @@ function TodoistProvider:add_file_to_task(task_id, filename, callback)
     -- Get current task to append to existing description
     local get_url = "https://api.todoist.com/rest/v2/tasks/" .. task_id
 
-    curl.request({
+    http.request({
         url = get_url,
         method = "get",
         headers = {
@@ -183,7 +183,7 @@ function TodoistProvider:add_file_to_task(task_id, filename, callback)
                 local update_data = { description = updated_description }
                 local json_data = vim.fn.json_encode(update_data)
 
-                curl.request({
+                http.request({
                     url = get_url,
                     method = "post",
                     headers = {

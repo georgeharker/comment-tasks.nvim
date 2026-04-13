@@ -3,7 +3,7 @@
 local interface = require("comment-tasks.providers.interface")
 local utils = require("comment-tasks.core.utils")
 local config = require("comment-tasks.core.config")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -64,8 +64,8 @@ function ClickUpProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(task_data)
     local api_url = "https://api.clickup.com/api/v2/list/" .. self.config.list_id .. "/task"
 
-    -- Execute API request using plenary curl
-    curl.request({
+    -- Execute API request
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -147,8 +147,8 @@ function ClickUpProvider:update_task_status(task_id, status, callback)
     local json_data = vim.fn.json_encode(task_data)
     local api_url = "https://api.clickup.com/api/v2/task/" .. task_id
 
-    -- Execute API request using plenary curl
-    curl.request({
+    -- Execute API request
+    http.request({
         url = api_url,
         method = "put",
         headers = {
@@ -267,7 +267,7 @@ function ClickUpProvider:get_task_with_custom_fields(task_id, callback)
 
     local api_url = "https://api.clickup.com/api/v2/task/" .. task_id .. "?include_subtasks=false"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "get",
         headers = {
@@ -375,7 +375,7 @@ function ClickUpProvider:set_custom_field_value(task_id, field_id, field_value, 
     local json_data = vim.fn.json_encode(field_data)
     local api_url = "https://api.clickup.com/api/v2/task/" .. task_id .. "/field/" .. field_id
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -435,7 +435,7 @@ function ClickUpProvider:update_custom_field_by_id(task_id, field_id, field_valu
     local json_data = vim.fn.json_encode(task_data)
     local api_url = "https://api.clickup.com/api/v2/task/" .. task_id
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "put",
         headers = {

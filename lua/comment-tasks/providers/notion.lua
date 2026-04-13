@@ -2,7 +2,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local config = require("comment-tasks.core.config")
-local curl = require("plenary.curl")
+local http = require("comment-tasks.core.http")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -144,7 +144,7 @@ function NotionProvider:create_task(task_name, filename, callback)
     local json_data = vim.fn.json_encode(page_data)
     local api_url = "https://api.notion.com/v1/pages"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "post",
         headers = {
@@ -213,7 +213,7 @@ function NotionProvider:update_task_status(page_id, status, callback)
     local json_data = vim.fn.json_encode(update_data)
     local api_url = "https://api.notion.com/v1/pages/" .. page_id
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "patch",
         headers = {
@@ -276,7 +276,7 @@ function NotionProvider:add_file_to_task(page_id, filename, callback)
     local json_data = vim.fn.json_encode(append_data)
     local api_url = "https://api.notion.com/v1/blocks/" .. page_id .. "/children"
 
-    curl.request({
+    http.request({
         url = api_url,
         method = "patch",
         headers = {
