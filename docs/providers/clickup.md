@@ -54,11 +54,14 @@ https://app.clickup.com/[team_id]/v/li/[list_id]
 curl -H "Authorization: YOUR_API_KEY" "https://api.clickup.com/api/v2/team"
 ```
 
-#### Team ID (Optional but Recommended)
+#### Team ID (Optional)
 ```
 https://app.clickup.com/[team_id]/home
                         ↳ This is your team_id
 ```
+
+`team_id` is accepted (and can be set per-project via `.comment-tasks.json`)
+but is not currently used by any API call.
 
 ## Usage
 
@@ -73,15 +76,6 @@ All commands work with your configured statuses:
 :ClickUpTask in_progress  " Update task to 'In Progress' status
 :ClickUpTask blocked      " Update task to 'Blocked' status
 :ClickUpTask testing      " Update task to 'QA Testing' status
-:ClickUpTask addfile      " Add current file to task's SourceFiles field
-```
-
-
-### Cross-Reference Operations
-
-```vim
-:ClickUpTaskCrossRef      " Cross-reference tasks in current file
-:ClickUpTaskLinkFiles     " Link related files to existing tasks
 :ClickUpTask addfile      " Add current file to task's SourceFiles field
 ```
 
@@ -141,26 +135,19 @@ clickup = {
     enabled = true,
     api_key_env = "CLICKUP_API_KEY",
     list_id = "123456789",
-    team_id = "987654321",  -- Recommended for better performance
+    team_id = "987654321",  -- Optional
     
     statuses = {
         new = "To Do",
         completed = "Complete",
         -- Add your custom statuses here
     },
-    
-    -- Optional: Default assignee ID
-    default_assignee = "user_id",
-    
-    -- Optional: Default priority (1=urgent, 2=high, 3=normal, 4=low)  
-    default_priority = 3,
-    
-    -- Optional: Custom fields
-    custom_fields = {
-        source_files = "SourceFiles", -- Field name for file tracking
-    }
 }
 ```
+
+File references are stored in a ClickUp custom field named `SourceFiles`
+(the field name is fixed) — create a text custom field with that exact name
+on your list to use `:ClickUpTask addfile`.
 
 ## Troubleshooting
 
@@ -173,8 +160,6 @@ clickup = {
    ```
 
 2. **Check permissions**: Ensure API key has access to the list
-
-3. **Verify team_id**: Make sure team_id matches the list's team
 
 ### "Status not found" Error
 
@@ -206,13 +191,9 @@ ClickUp uses the [ClickUp API v2](https://clickup.com/api/). The plugin makes re
 - `POST /api/v2/list/{list_id}/task` - Create tasks
 - `PUT /api/v2/task/{task_id}` - Update task status
 - `GET /api/v2/task/{task_id}` - Retrieve task details
+- `POST /api/v2/task/{task_id}/field/{field_id}` - Update custom fields
 
 ## Tips
 
-1. **Use team_id**: Improves API performance and reduces errors
-3. **Status naming**: Use clear, descriptive status names in your workspace
-4. **File tracking**: Use `:addfile` to maintain source code references
-5. **Cross-references**: Use cross-ref commands to link related work
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#clickup-workflows).
-- `PUT /api/v2/task/{task_id}/field/{field_id}` - Update custom fields
+1. **Status naming**: Use clear, descriptive status names in your workspace
+2. **File tracking**: Use `:addfile` to maintain source code references

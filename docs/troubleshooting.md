@@ -34,7 +34,7 @@ This guide covers common issues and solutions for comment-tasks.nvim.
 
 3. **Check debug output**:
    ```vim
-   :lua print(vim.inspect(require("comment-tasks").get_config()))
+   :lua print(vim.inspect(require("comment-tasks.core.config").get_config()))
    ```
 
 ### "API key not found in environment variable" Error
@@ -84,7 +84,7 @@ clickup = {
     enabled = true,
     api_key_env = "CLICKUP_API_KEY",
     list_id = "123456789",  -- ← Required
-    -- team_id is optional but recommended
+    -- team_id is optional
 }
 ```
 
@@ -241,9 +241,15 @@ asana = {
    -- In configuration
    languages = {
        custom_lang = {
-           single_line = "%%",     -- Custom single line comment  
-           block_start = "%{",     -- Custom block start
-           block_end = "%}"        -- Custom block end
+           comment_nodes = { "comment" },
+           comment_styles = {
+               single_line = { prefix = "%% ", continue_with = "%% " },
+               block = {
+                   start_markers = { "%{" },
+                   end_markers = { "%}" },
+                   continue_with = "",
+               },
+           },
        }
    }
    ```
@@ -269,7 +275,7 @@ asana = {
 
 2. **Verify provider is enabled and configured**:
    ```vim
-   :lua print(vim.inspect(require("comment-tasks").get_providers()))
+   :lua print(vim.inspect(require("comment-tasks.core.config").get_enabled_providers()))
    ```
 
 3. **Check for configuration errors**:
@@ -324,9 +330,10 @@ asana = {
    :echo expand('%:p')  " Check full file path
    ```
 
-3. **Test with full path**:
+3. **Note**: `addfile` always adds the current buffer's file; its only
+   optional argument is a language override:
    ```vim
-   :ClickUpTask addfile /full/path/to/file.py
+   :ClickUpTask addfile python
    ```
 
 ## Provider-Specific Issues
@@ -378,13 +385,13 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ```vim
 " View full configuration
-:lua print(vim.inspect(require("comment-tasks").get_config()))
+:lua print(vim.inspect(require("comment-tasks.core.config").get_config()))
 
 " Check specific provider
-:lua print(vim.inspect(require("comment-tasks").get_provider_config("clickup")))
+:lua print(vim.inspect(require("comment-tasks.core.config").get_provider_config("clickup")))
 
-" View available providers
-:lua print(vim.inspect(require("comment-tasks").get_providers()))
+" View enabled providers
+:lua print(vim.inspect(require("comment-tasks.core.config").get_enabled_providers()))
 ```
 
 ### Test Provider Connections
@@ -394,19 +401,12 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 :lua print(vim.env.CLICKUP_API_KEY)
 :lua print(vim.env.GITHUB_TOKEN)
 
-" Test provider configuration  
-:lua require("comment-tasks").validate_provider("clickup")
+" Validate the whole configuration (returns warnings/errors)
+:lua print(vim.inspect(require("comment-tasks.core.config").validate_config()))
 ```
 
-### Enable Debug Logging
-
-```lua
--- In your configuration
-require("comment-tasks").setup({
-    debug = true,  -- Enable debug output
-    -- ... your other config
-})
-```
+Configuration warnings are also emitted via `vim.notify` during `setup()` —
+check `:messages` after startup.
 
 ## Getting Help
 
@@ -427,8 +427,7 @@ require("comment-tasks").setup({
 :checkhealth
 
 " Plugin information
-:lua print(require("comment-tasks").version)
-:lua print(vim.inspect(require("comment-tasks").get_config()))
+:lua print(vim.inspect(require("comment-tasks.core.config").get_config()))
 
 " Environment check (safe - doesn't show values)
 :lua for k,v in pairs(vim.env) do if k:match("API") or k:match("TOKEN") then print(k .. "=" .. (v and "SET" or "UNSET")) end end
@@ -450,6 +449,6 @@ Before asking for help, verify:
 
 - **GitHub Issues**: Bug reports and feature requests
 - **GitHub Discussions**: Questions and community help  
-- **Documentation**: Check [docs/](../) for detailed guides
+- **Documentation**: Check the [README](../README.md) and the other guides in `docs/` for details
 
 Remember to remove API keys and sensitive information before sharing configuration!

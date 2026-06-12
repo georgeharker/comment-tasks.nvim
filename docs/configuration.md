@@ -75,7 +75,7 @@ clickup = {
     enabled = true,
     api_key_env = "CLICKUP_API_KEY",        -- Environment variable name
     list_id = "123456789",                  -- Required: ClickUp list ID
-    team_id = "987654321",                  -- Optional: team ID for performance
+    team_id = "987654321",                  -- Optional: settable per-project via .comment-tasks.json
     
     statuses = {
         new = "To Do",
@@ -85,15 +85,12 @@ clickup = {
         blocked = "Blocked",
         testing = "QA Testing",
     },
-    
-    -- Optional advanced settings
-    default_assignee = "user_id",           -- Default assignee for new tasks
-    default_priority = 3,                   -- 1=urgent, 2=high, 3=normal, 4=low
-    custom_fields = {
-        source_files = "SourceFiles",       -- Field name for file tracking
-    }
 }
 ```
+
+File references are stored in a ClickUp custom field named `SourceFiles` —
+create a text custom field with that exact name on your list to use
+`:ClickUpTask addfile`.
 
 #### Asana
 
@@ -112,12 +109,6 @@ asana = {
         blocked = "Blocked",
         waiting = "Waiting on Others",
     },
-    
-    -- Optional settings
-    task_defaults = {
-        notes = "Created from code comment",
-        due_on = nil,                       -- Default due date (YYYY-MM-DD)
-    }
 }
 ```
 
@@ -138,8 +129,9 @@ linear = {
     },
     
     -- Optional settings
-    default_labels = {"bug", "feature"},    -- Default labels for new issues
-    default_assignee = "user_id",           -- Default assignee ID
+    project_id = "project_id",              -- Optional: specific project
+    assignee_id = "user_id",                -- Optional: default assignee ID
+    priority = 0,                           -- 0=none, 1=urgent, 2=high, 3=medium, 4=low
 }
 ```
 
@@ -148,9 +140,8 @@ linear = {
 ```lua
 jira = {
     enabled = true,
-    url = "https://your-domain.atlassian.net",  -- Jira instance URL
-    username_env = "JIRA_USERNAME",             -- Environment variable for username
-    api_token_env = "JIRA_API_TOKEN",           -- Environment variable for API token  
+    server_url = "https://your-domain.atlassian.net",  -- Jira instance URL
+    api_key_env = "JIRA_API_TOKEN",             -- Environment variable for API token
     project_key = "PROJ",                       -- Required: Jira project key
     
     statuses = {
@@ -163,7 +154,7 @@ jira = {
     
     -- Optional settings
     issue_type = "Task",                        -- Default issue type
-    default_assignee = "username",              -- Default assignee username
+    assignee_id = "account_id",                 -- Optional: default assignee account ID
 }
 ```
 
@@ -172,7 +163,7 @@ jira = {
 ```lua
 notion = {
     enabled = true,
-    api_key_env = "NOTION_TOKEN",
+    api_key_env = "NOTION_API_KEY",
     database_id = "database_id_here",           -- Required: Notion database ID
     
     statuses = {
@@ -182,12 +173,13 @@ notion = {
         review = "Review",
     },
     
-    -- Optional settings  
-    title_property = "Name",                    -- Property name for task title
-    status_property = "Status",                 -- Property name for status
-    url_property = "URL",                       -- Property name for URL storage
+    -- Optional settings
+    assignee_id = "user_id",                    -- Optional: default assignee
 }
 ```
+
+The Notion database must have a title property named `Name` and a status
+property named `Status` — these property names are fixed.
 
 #### Monday.com
 
@@ -198,7 +190,7 @@ monday = {
     board_id = "123456789",                     -- Required: Monday.com board ID
     
     statuses = {
-        new = "Stuck",
+        new = "Not Started",
         completed = "Done", 
         in_progress = "Working on it",
         review = "Review",
@@ -206,7 +198,8 @@ monday = {
     
     -- Optional settings
     group_id = "topics",                        -- Default group for new items
-    default_assignee = "user_id",               -- Default assignee ID
+    status_column_id = "status",                -- Status column ID (required for status updates)
+    notes_column_id = "text",                   -- Text column ID for notes/file references
 }
 ```
 
@@ -222,11 +215,6 @@ github = {
     api_key_env = "GITHUB_TOKEN",
     repo_owner = "username",                    -- Required: GitHub username/org
     repo_name = "repository",                   -- Required: repository name
-    
-    -- Optional settings
-    default_labels = {"bug", "enhancement"},    -- Default labels for issues
-    default_assignee = "username",              -- Default assignee username
-    default_milestone = 1,                      -- Default milestone ID
 }
 ```
 
@@ -236,12 +224,8 @@ github = {
 gitlab = {
     enabled = true,
     api_key_env = "GITLAB_TOKEN", 
-    url = "https://gitlab.com",                 -- GitLab instance URL
+    gitlab_url = "https://gitlab.com",          -- GitLab instance URL (override for self-hosted)
     project_id = "12345678",                    -- Required: GitLab project ID
-    
-    -- Optional settings
-    default_labels = ["bug", "feature"],        -- Default labels for issues  
-    default_assignee = "username",              -- Default assignee username
 }
 ```
 
@@ -251,9 +235,16 @@ gitlab = {
 trello = {
     enabled = true,
     api_key_env = "TRELLO_API_KEY",
-    token_env = "TRELLO_TOKEN", 
+    api_token_env = "TRELLO_API_TOKEN",         -- Trello needs both a key and a token
     board_id = "board_id_here",                 -- Required: Trello board ID
-    list_id = "list_id_here",                   -- Required: Trello list ID
+    
+    -- Statuses map to list names on the board; cards are moved between lists
+    statuses = {
+        new = "To Do",
+        completed = "Done",
+        in_progress = "Doing",
+        review = "Review",
+    },
 }
 ```
 
@@ -264,10 +255,6 @@ todoist = {
     enabled = true,
     api_key_env = "TODOIST_API_TOKEN",
     project_id = "project_id",                  -- Optional: Todoist project ID
-    
-    -- Optional settings
-    default_labels = ["coding", "bug"],         -- Default labels for tasks
-    default_priority = 2,                       -- 1=normal, 2=high, 3=very high, 4=urgent
 }
 ```
 
@@ -279,25 +266,33 @@ The plugin automatically detects comments in 15+ languages using Tree-sitter:
 
 ```lua
 languages = {
-    -- Override default comment patterns (optional)
+    -- Override or extend a language's detection config (optional).
+    -- Each language lists the Tree-sitter node types treated as comments
+    -- and the comment styles used when inserting task URLs.
     python = {
-        single_line = "#",
-        block_start = '"""',
-        block_end = '"""'
-    },
-    
-    javascript = {
-        single_line = "//", 
-        block_start = "/*",
-        block_end = "*/"
+        comment_nodes = { "comment", "string" },
+        comment_styles = {
+            single_line = { prefix = "# ", continue_with = "# " },
+            docstring = {
+                start_markers = { '"""', "'''" },
+                end_markers = { '"""', "'''" },
+                continue_with = "",
+            },
+        },
     },
     
     -- Add custom language support
-    custom_lang = {
-        single_line = "--",
-        block_start = "--[[",
-        block_end = "]]"
-    }
+    mylang = {
+        comment_nodes = { "comment" },
+        comment_styles = {
+            single_line = { prefix = "-- ", continue_with = "-- " },
+            block = {
+                start_markers = { "--[[" },
+                end_markers = { "--]]" },
+                continue_with = "-- ",
+            },
+        },
+    },
 }
 ```
 
@@ -328,11 +323,10 @@ export ASANA_ACCESS_TOKEN="your_token"
 export LINEAR_API_KEY="your_api_key"
 
 # Jira
-export JIRA_USERNAME="your_email@domain.com"
 export JIRA_API_TOKEN="your_api_token"
 
 # Notion
-export NOTION_TOKEN="your_integration_token"
+export NOTION_API_KEY="your_integration_token"
 
 # Monday.com
 export MONDAY_API_TOKEN="your_api_token"
@@ -345,7 +339,7 @@ export GITLAB_TOKEN="your_personal_access_token"
 
 # Trello
 export TRELLO_API_KEY="your_api_key"
-export TRELLO_TOKEN="your_token"
+export TRELLO_API_TOKEN="your_token"
 
 # Todoist
 export TODOIST_API_TOKEN="your_api_token"
@@ -545,15 +539,8 @@ The plugin validates your configuration on startup. Common errors:
 Check your configuration:
 
 ```vim
-:lua print(vim.inspect(require("comment-tasks").get_config()))
-:lua print(vim.inspect(require("comment-tasks").get_providers()))
-```
-
-Test provider connections:
-
-```vim
-:ClickUpTask test        " Test ClickUp connection (if supported)
-:AsanaTask test          " Test Asana connection (if supported)
+:lua print(vim.inspect(require("comment-tasks.core.config").get_config()))
+:lua print(vim.inspect(require("comment-tasks.core.config").validate_config()))
 ```
 
 ### Common Configuration Issues
@@ -589,4 +576,4 @@ local my_config = {
 require("comment-tasks").setup(my_config)
 ```
 
-For more specific provider setup, see the individual provider documentation in [providers/](providers/).
+For more specific provider setup, see the individual provider documentation, e.g. [ClickUp](providers/clickup.md), [GitHub](providers/github.md), [Jira](providers/jira.md), [Linear](providers/linear.md).

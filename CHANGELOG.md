@@ -69,3 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ```
 
 For previous version history, see the git log or releases section.
+
+[Unreleased]: https://github.com/georgeharker/comment-tasks.nvim/compare/v2.5.0...HEAD
+[2.0.0]: https://github.com/georgeharker/comment-tasks.nvim/releases/tag/v2.0.0

@@ -25,7 +25,7 @@ require("comment-tasks").setup({
             
             -- Custom status configuration (match your board's status column)
             statuses = {
-                new = "Stuck",              -- Special: used for item creation
+                new = "Not Started",        -- Special: used for item creation
                 completed = "Done",         -- Special: used for completion
                 in_progress = "Working on it", -- Custom status
                 review = "Review",          -- Custom status
@@ -35,8 +35,9 @@ require("comment-tasks").setup({
             -- Optional: Default group for new items
             group_id = "topics",            -- Group/section ID
             
-            -- Optional: Default assignee
-            default_assignee = "user_id",   -- User ID for assignment
+            -- Optional: Column IDs (status updates require status_column_id)
+            status_column_id = "status",    -- Status column ID
+            notes_column_id = "text",       -- Text column ID for notes/file references
         }
     }
 })
@@ -107,29 +108,16 @@ monday = {
     board_id = "123456789",
     
     statuses = {
-        new = "Stuck",
+        new = "Not Started",
         completed = "Done",
         -- Add your board's status options here
     },
     
     -- Optional: Board organization
     group_id = "new_group",             -- Default group for new items
-    default_assignee = "user_id",       -- Default person column value
     
-    -- Optional: Column mapping
-    columns = {
-        status = "status",              -- Status column ID
-        person = "person",              -- Person column ID
-        date = "date4",                 -- Date column ID
-        text = "text",                  -- Text column ID
-    },
-    
-    -- Optional: Item template
-    item_template = {
-        name_prefix = "🔧 ",           -- Prefix for item names
-        updates_template = "Source: {filename}\\nDescription: {comment_text}"
-    }
+    -- Optional: Column IDs
+    status_column_id = "status",        -- Status column ID (required for status updates)
+    notes_column_id = "text",           -- Text column ID for notes/file references
 }
 ```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#monday-workflows).

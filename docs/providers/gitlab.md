@@ -14,8 +14,10 @@
 
 ```bash
 export GITLAB_TOKEN="your_gitlab_personal_access_token"
-export GITLAB_URL="https://gitlab.com"  # or your GitLab instance URL
 ```
+
+A self-hosted instance URL is configured via the `gitlab_url` option (below),
+not an environment variable.
 
 ### 3. Plugin Configuration
 
@@ -25,14 +27,8 @@ require("comment-tasks").setup({
         gitlab = {
             enabled = true,
             api_key_env = "GITLAB_TOKEN",
-            url = "https://gitlab.com",         -- GitLab instance URL
-            project_id = "12345678",           -- Required: GitLab project ID
-            
-            -- Optional: Default labels for new issues
-            default_labels = ["bug", "enhancement"],
-            
-            -- Optional: Default assignee (username)
-            default_assignee = "username",
+            gitlab_url = "https://gitlab.com",  -- GitLab instance URL
+            project_id = "12345678",            -- Required: GitLab project ID
         }
     }
 })
@@ -103,47 +99,8 @@ GitLab Issues use a simple open/closed model:
 gitlab = {
     enabled = true,
     api_key_env = "GITLAB_TOKEN",
-    url = "https://gitlab.com",         -- or your GitLab instance
+    gitlab_url = "https://gitlab.com",  -- or your GitLab instance
     project_id = "12345678",            -- Your project ID
-}
-```
-
-### Advanced Configuration
-
-```lua
-gitlab = {
-    enabled = true,
-    api_key_env = "GITLAB_TOKEN", 
-    url = "https://gitlab.example.com", -- Self-hosted GitLab instance
-    project_id = "12345678",
-    
-    -- Optional: Default issue configuration
-    default_labels = [
-        "todo",             -- For TODO comments
-        "bug",              -- For FIXME comments
-        "enhancement",      -- For FEATURE comments
-        "documentation"     -- For NOTE comments
-    ],
-    
-    -- Optional: Default assignee
-    default_assignee = "developer.username",
-    
-    -- Optional: Default milestone ID  
-    default_milestone = 1,
-    
-    -- Optional: Issue template
-    issue_template = {
-        title_prefix = "[Code] ",
-        description_template = "## Description\\n{comment_text}\\n\\n## Source\\nFile: `{filename}`\\nLine: {line_number}\\n\\n## Tasks\\n- [ ] Implement solution\\n- [ ] Add tests\\n- [ ] Update documentation"
-    },
-    
-    -- Optional: Automatic labeling based on comment type
-    auto_labels = {
-        TODO = ["enhancement"],
-        FIXME = ["bug", "priority::high"], 
-        HACK = ["technical-debt"],
-        NOTE = ["documentation"]
-    }
 }
 ```
 
@@ -189,12 +146,7 @@ For self-hosted GitLab instances:
 gitlab = {
     enabled = true,
     api_key_env = "GITLAB_TOKEN",
-    url = "https://gitlab.company.com",  -- Your GitLab instance
+    gitlab_url = "https://gitlab.company.com",  -- Your GitLab instance
     project_id = "12345678",
-    
-    -- Optional: Skip SSL verification (not recommended for production)
-    verify_ssl = false,
 }
 ```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#gitlab-workflows).

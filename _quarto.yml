@@ -1,0 +1,59 @@
+project:
+  type: website
+  render:
+    - index.md
+    - README.md         # README files must be listed explicitly; globs skip them
+    - docs/*.md
+    - docs/providers/*.md
+    - CHANGELOG.md
+    - CONTRIBUTING.md
+
+# gfm_auto_identifiers makes heading anchors match GitHub's slugs, which the
+# docs' cross-links use. Keep pandoc's full markdown reader otherwise —
+# `from: gfm` breaks Quarto's navigation divs.
+from: markdown+gfm_auto_identifiers
+
+website:
+  title: "comment-tasks.nvim"
+  search: true
+  sidebar:
+    style: docked
+    tools:
+      - icon: github
+        href: https://github.com/georgeharker/comment-tasks.nvim
+        text: GitHub repository
+    contents:
+      - text: "Home"
+        href: index.md
+      - text: "Overview (README)"
+        href: README.md
+      - section: "Guides"
+        contents:
+          - docs/installation.md
+          - docs/configuration.md
+          - docs/troubleshooting.md
+      - section: "Reference"
+        contents:
+          - docs/api-reference.md
+          - text: "Changelog"
+            href: CHANGELOG.md
+          - text: "Contributing"
+            href: CONTRIBUTING.md
+      - section: "Providers"
+        contents:
+          - docs/providers/asana.md
+          - docs/providers/clickup.md
+          - docs/providers/github.md
+          - docs/providers/gitlab.md
+          - docs/providers/jira.md
+          - docs/providers/linear.md
+          - docs/providers/monday.md
+          - docs/providers/notion.md
+          - docs/providers/todoist.md
+          - docs/providers/trello.md
+
+format:
+  html:
+    theme: pulse
+    toc: true
+    embed-resources: true

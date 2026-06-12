@@ -130,7 +130,7 @@ M.default_config = {
         },
         trello = {
             api_key_env = "TRELLO_API_KEY",
-            api_secret_env = "TRELLO_API_SECRET", -- Trello requires both key and secret
+            api_token_env = "TRELLO_API_TOKEN", -- Trello requires both key and token
             board_id = nil, -- Required: Trello board ID
             -- Trello uses lists as statuses
             statuses = {
@@ -636,8 +636,12 @@ end
 -- Fields each provider exposes as project-level overrides.
 -- API keys and the enabled flag are intentionally absent — they belong in the
 -- personal Neovim config only.
+-- "statuses" is overridable where the status set belongs to the target
+-- container (ClickUp statuses are per-list; Trello statuses are list names
+-- on the board; Monday statuses are board column labels) — a project
+-- pointing at a different list/board needs its status names to follow.
 local PROJECT_OVERRIDE_FIELDS = {
-    clickup = { "list_id", "team_id" },
+    clickup = { "list_id", "team_id", "statuses" },
     github  = { "repo_owner", "repo_name" },
     gitlab  = { "project_id", "gitlab_url" },
     jira    = { "project_key", "server_url" },
@@ -645,8 +649,8 @@ local PROJECT_OVERRIDE_FIELDS = {
     asana   = { "project_gid", "assignee_gid" },
     todoist = { "project_id" },
     notion  = { "database_id" },
-    trello  = { "list_id" },
-    monday  = { "board_id" },
+    trello  = { "board_id", "statuses" },
+    monday  = { "board_id", "statuses" },
 }
 
 --- Apply project-file overrides onto an already-deep-copied config table.
@@ -671,7 +675,13 @@ local function apply_project_overrides(effective, project_cfg)
         if allowed and target and type(values) == "table" then
             for _, field in ipairs(allowed) do
                 if values[field] ~= nil then
-                    target[field] = values[field]
+                    if type(values[field]) == "table" and type(target[field]) == "table" then
+                        -- Table fields (statuses) merge over the configured
+                        -- defaults so a project lists only the names it changes.
+                        target[field] = vim.tbl_deep_extend("force", target[field], values[field])
+                    else
+                        target[field] = values[field]
+                    end
                 end
             end
         end

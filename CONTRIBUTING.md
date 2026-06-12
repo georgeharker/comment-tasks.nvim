@@ -14,7 +14,7 @@ When filing a bug report, please include:
 6. **Error messages** (if any)
 
 **Template:**
-```markdown
+````markdown
 ## Bug Description
 Brief description of the issue
 
@@ -38,12 +38,13 @@ Brief description of the issue
 ## Actual Behavior
 
 ## Error Messages
+````
 
 ## 🚀 Pull Requests
 
 ### Before Submitting
 - Check existing issues and PRs to avoid duplicates
-- Run tests: `nvim --headless -c "PlenaryBustedDirectory tests" -c "qa!"`
+- Run tests: `./run_all_tests.sh` (uses [vusted](https://github.com/notomo/vusted))
 - Update documentation if needed
 
 ### PR Guidelines
@@ -71,19 +72,21 @@ docs: update ClickUp configuration examples
 
 ## 🧪 Running Tests
 
+Tests use [vusted](https://github.com/notomo/vusted)
+(`luarocks --lua-version=5.1 install vusted`):
+
 ```bash
 # Run all tests
-nvim --headless -c "PlenaryBustedDirectory tests" -c "qa!"
+./run_all_tests.sh
 
-# Run specific test file
-nvim --headless -c "PlenaryBustedFile tests/init_spec.lua" -c "qa!"
+# Run a specific spec file
+vusted tests/init_spec.lua
 ```
 
 ## 📝 Documentation
 
 - Keep README examples up to date
 - Update provider-specific docs in `docs/providers/`
-- Add examples to `docs/examples/` for new features
 
 ## ❓ Questions
 

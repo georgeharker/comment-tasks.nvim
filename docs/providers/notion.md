@@ -19,7 +19,7 @@
 ### 3. Environment Configuration
 
 ```bash
-export NOTION_TOKEN="your_notion_integration_token_here"
+export NOTION_API_KEY="your_notion_integration_token_here"
 ```
 
 ### 4. Plugin Configuration
@@ -29,7 +29,7 @@ require("comment-tasks").setup({
     providers = {
         notion = {
             enabled = true,
-            api_key_env = "NOTION_TOKEN",
+            api_key_env = "NOTION_API_KEY",
             database_id = "your_database_id",       -- Required: Notion database ID
             
             -- Custom status configuration (match your database Status property)
@@ -41,10 +41,8 @@ require("comment-tasks").setup({
                 blocked = "Blocked",        -- Custom status
             },
             
-            -- Optional: Property configuration
-            title_property = "Name",        -- Property name for task title
-            status_property = "Status",     -- Property name for status
-            url_property = "URL",           -- Property name for storing URLs
+            -- Optional: Default assignee (people property "Assignee")
+            assignee_id = "user_id",
         }
     }
 })
@@ -93,12 +91,19 @@ Place cursor on comment → `:NotionTask new`
 
 ## Configuration Options
 
-### Database Property Mapping
+### Database Properties
+
+The plugin expects fixed property names in your database:
+
+- A **title** property named `Name` — used for the task title
+- A **status** property named `Status` — used for status updates
+- Optionally, a **people** property named `Assignee` — set when `assignee_id`
+  is configured
 
 ```lua
 notion = {
     enabled = true,
-    api_key_env = "NOTION_TOKEN",
+    api_key_env = "NOTION_API_KEY",
     database_id = "abc123def456789...",
     
     -- Required: Status configuration
@@ -108,21 +113,7 @@ notion = {
         -- Add your database status options here
     },
     
-    -- Property names (must match your database)
-    title_property = "Task",            -- Title property name
-    status_property = "Status",         -- Status property name  
-    url_property = "Source URL",        -- URL property name
-    description_property = "Description", -- Description property name
-    
-    -- Optional: Additional properties
-    properties = {
-        priority = "Priority",          -- Priority property
-        assignee = "Assignee",          -- Person property for assignment
-        tags = "Tags",                  -- Multi-select property for tags
-        due_date = "Due Date",          -- Date property
-        project = "Project",            -- Select property for project
-    }
+    -- Optional: Default assignee
+    assignee_id = "user_id",
 }
 ```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#notion-workflows).

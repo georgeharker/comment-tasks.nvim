@@ -11,9 +11,11 @@
 ### 2. Environment Configuration
 
 ```bash
-export JIRA_USERNAME="your_email@company.com"
 export JIRA_API_TOKEN="your_api_token_here"
 ```
+
+The token is sent as a Bearer token; the instance URL is set via the
+`server_url` config option below.
 
 ### 3. Plugin Configuration
 
@@ -22,9 +24,8 @@ require("comment-tasks").setup({
     providers = {
         jira = {
             enabled = true,
-            url = "https://your-domain.atlassian.net",  -- Your Jira instance URL
-            username_env = "JIRA_USERNAME",             -- Environment variable for email
-            api_token_env = "JIRA_API_TOKEN",           -- Environment variable for API token
+            server_url = "https://your-domain.atlassian.net",  -- Your Jira instance URL
+            api_key_env = "JIRA_API_TOKEN",             -- Environment variable for API token
             project_key = "PROJ",                       -- Required: Jira project key
             
             -- Custom status configuration (match your Jira workflow)
@@ -40,7 +41,7 @@ require("comment-tasks").setup({
             
             -- Optional: Default issue configuration
             issue_type = "Task",                -- Default issue type
-            default_assignee = "username",      -- Default assignee username
+            assignee_id = "account_id",         -- Optional: default assignee account ID
         }
     }
 })
@@ -137,9 +138,8 @@ statuses = {
 ```lua
 jira = {
     enabled = true,
-    url = "https://company.atlassian.net",
-    username_env = "JIRA_USERNAME",
-    api_token_env = "JIRA_API_TOKEN", 
+    server_url = "https://company.atlassian.net",
+    api_key_env = "JIRA_API_TOKEN",
     project_key = "DEVOPS",
     
     statuses = {
@@ -150,25 +150,7 @@ jira = {
     
     -- Optional: Issue configuration  
     issue_type = "Story",               -- Bug, Task, Story, Epic, etc.
-    default_assignee = "john.doe",      -- Username (not display name)
-    default_priority = "Medium",        -- Lowest, Low, Medium, High, Highest
-    
-    -- Optional: Component and version assignment
-    default_components = ["Backend", "API"],
-    default_fix_version = "v2.1.0",
-    
-    -- Optional: Custom fields (use field IDs)
-    custom_fields = {
-        story_points = "customfield_10016",     -- Story points field ID
-        sprint = "customfield_10020",           -- Sprint field ID  
-        epic_link = "customfield_10014",        -- Epic link field ID
-    },
-    
-    -- Optional: Issue template
-    issue_template = {
-        description = "h3. Problem\\n{description}\\n\\nh3. Acceptance Criteria\\n* ",
-        environment = "Development"
-    }
+    assignee_id = "account_id",         -- Optional: default assignee account ID
 }
 ```
 
@@ -206,14 +188,9 @@ jira = {
 
 1. **API token validity**:
    - Ensure API token is not expired
-   - Verify username is correct email address
    - Check token permissions in Atlassian account
 
-2. **Username format**:
-   - Use email address, not display name
-   - Ensure no extra spaces or characters
-
-3. **Test authentication**:
+2. **Test authentication**:
    ```bash
    curl -u "email@domain.com:api_token" \\
         "https://your-domain.atlassian.net/rest/api/2/myself"
@@ -244,34 +221,16 @@ Jira uses the [REST API v2/v3](https://developer.atlassian.com/server/jira/platf
 
 ### Multi-Project Setup
 
-Different projects with different configurations:
+To target a different Jira project per repository, use a `.comment-tasks.json`
+file at the project root — `project_key` and `server_url` are overridable
+there (see the
+[Configuration Reference](../configuration.md#project-level-configuration-comment-tasksjson)):
 
-```lua
-jira_dev = {
-    enabled = true,
-    project_key = "DEV",
-    issue_type = "Story",
-    statuses = { /* development workflow */ }
-}
-
-jira_ops = {
-    enabled = true,
-    project_key = "OPS", 
-    issue_type = "Task",
-    statuses = { /* ops workflow */ }
-}
-```
-
-### Custom Field Integration
-
-Map Jira custom fields for rich metadata:
-
-```lua
-custom_fields = {
-    story_points = "customfield_10016",     -- Agile story points
-    business_value = "customfield_10017",   -- Business value scoring
-    technical_debt = "customfield_10018",   -- Technical debt tracking
-    security_review = "customfield_10019",  -- Security review required
+```json
+{
+    "providers": {
+        "jira": { "project_key": "DEV", "server_url": "https://company.atlassian.net" }
+    }
 }
 ```
 
@@ -295,5 +254,3 @@ jira = {
     }
 }
 ```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#jira-workflows).

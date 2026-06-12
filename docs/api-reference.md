@@ -15,10 +15,13 @@ Initialize the plugin with your configuration.
 ```lua
 require("comment-tasks").setup({
     default_provider = "clickup",
-    clickup = {
-        api_token = vim.env.CLICKUP_API_TOKEN,
-        team_id = "your_team_id",
-    }
+    providers = {
+        clickup = {
+            enabled = true,
+            api_key_env = "CLICKUP_API_KEY",
+            list_id = "your_list_id",
+        },
+    },
 })
 ```
 
@@ -76,6 +79,8 @@ require("comment-tasks").update_task_status_from_comment("completed", "lua")
 Add the current file as a source/attachment to the task referenced in the current line's comment.
 
 **Parameters:**
+- `lang_override` (string, optional): Language override
+- `provider_name` (string, optional): Provider to use. Auto-detected from task URL if not specified
 
 **Examples:**
 ```lua
@@ -219,12 +224,12 @@ Each provider has different status values. See individual provider documentation
 - `"open"`, `"closed"`
 
 ### Asana
-- `"completed"`, `"incomplete"`
+- Configurable in setup (defaults: `"new"`, `"completed"`, `"review"`, `"in_progress"`, `"blocked"`)
 
 ### Linear
-- `"Backlog"`, `"Todo"`, `"In Progress"`, `"Done"`, `"Canceled"`
+- Configurable in setup (defaults: `"new"`, `"completed"`, `"review"`, `"in_progress"`, `"backlog"`)
 
-See [Provider Documentation](../README.md#providers) for complete provider-specific status lists.
+See [Provider Documentation](../README.md#provider-guides) for complete provider-specific status lists.
 
 ## Error Handling
 
@@ -238,7 +243,7 @@ No need for error checking in your keybinding code - the plugin handles it inter
 
 ## Language Detection
 
-The plugin auto-detects comment syntax for 20+ languages. You can override with `lang_override`:
+The plugin auto-detects comment syntax for 15+ languages. You can override with `lang_override`:
 
 ```lua
 -- Force Lua comment detection in any file
@@ -271,7 +276,6 @@ wk.register({
 ```lua
 {
     "georgeharker/comment-tasks.nvim",
-    dependencies = { "nvim-lua/plenary.nvim" },
     keys = {
         { "<leader>tc", function() require("comment-tasks").create_task_from_comment() end, desc = "Create task" },
         { "<leader>tu", function() require("comment-tasks").update_task_status_from_comment("completed") end, desc = "Complete task" },
@@ -289,7 +293,6 @@ wk.register({
 ```lua
 use {
     "georgeharker/comment-tasks.nvim",
-    requires = { "nvim-lua/plenary.nvim" },
     config = function()
         require("comment-tasks").setup({
             default_provider = "github",

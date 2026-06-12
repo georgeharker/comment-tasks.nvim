@@ -26,10 +26,6 @@ function TrelloProvider:is_enabled()
         return false, "Trello board_id not configured"
     end
 
-    if not self.config.list_mapping then
-        return false, "Trello list_mapping not configured"
-    end
-
     local api_key, error = self:get_api_key()
     if not api_key then
         return false, error

@@ -1,0 +1,26 @@
+# Thin caller for gh-quarto-publish: refresh the default-branch docs when a
+# release tag is pushed. Copy to .github/workflows/docs-on-tag.yml; change
+# `main` to your default branch if it differs (both occurrences).
+name: docs (release tag)
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: docs-refs/heads/main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Inert until the deploy vars/secrets are configured on the repo.
+    if: ${{ vars.DOCS_SSH_DEST != '' }}
+    uses: georgeharker/gh-quarto-publish/.github/workflows/publish.yml@main
+    with:
+      # Tags are cut from the default branch; releases refresh its docs.
+      target-prefix: main
+      ssh-dest: ${{ vars.DOCS_SSH_DEST }}
+      site-url: ${{ vars.DOCS_SITE_URL }}
+    secrets:
+      deploy-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+      host-key: ${{ secrets.DOCS_HOST_KEY }}

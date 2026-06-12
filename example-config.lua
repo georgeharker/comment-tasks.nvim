@@ -152,11 +152,10 @@ Environment Variables Setup:
 
 Features:
 
-✓ Multi-provider support (ClickUp, GitHub, Todoist)
+✓ Multi-provider support (ClickUp, GitHub, Todoist, GitLab, Linear, ...)
 ✓ Enhanced vim.notify integration with provider-specific titles
 ✓ Tree-sitter based comment detection with regex fallback
 ✓ Smart URL detection and task management across providers
-✓ Cross-reference capabilities for ClickUp (ripgrep + fallback)
 ✓ Structured file reference management per provider
 
 Notifications:
@@ -200,9 +199,10 @@ Benefits:
 Usage Examples:
 
 1. Generic commands (use default provider):
-   :TaskCreate          - Create task from comment
-   :TaskClose           - Close task from comment
-   :TaskAddFile         - Add current file to task
+   :CommentTask         - Create task from comment (defaults to 'new')
+   :CommentTask close   - Close task from comment
+   :CommentTaskClose    - Close task from comment
+   :CommentTaskAddFile  - Add current file to task
 
 2. Provider-specific commands:
    :ClickUpTask         - Create ClickUp task
@@ -210,23 +210,18 @@ Usage Examples:
    :TodoistTask         - Create Todoist task
    :GitLabTask          - Create GitLab issue
 
-3. ClickUp status commands (NEW - configurable statuses):
+3. ClickUp status commands (configurable statuses):
    :ClickUpTask new             - Create ClickUp task
    :ClickUpTask close           - Close ClickUp task (uses configured 'completed' status)
    :ClickUpTask review          - Set to review (uses configured 'review' status)
-   :ClickUpTask progress        - Set to in progress (uses configured 'in_progress' status)
+   :ClickUpTask in_progress     - Set to in progress (uses configured 'in_progress' status)
    :ClickUpTask blocked         - Set to blocked (uses custom 'blocked' status if configured)
-   :ClickUpTask status Testing  - Set to any custom status
    :ClickUpTask cancelled       - Set to cancelled (uses custom 'cancelled' status if configured)
+   :ClickUpTask Testing         - Any unrecognized first argument is sent as a
+                                  custom status name directly
 
    Examples with language override:
    :ClickUpTask blocked python  - Set to blocked status with Python language detection
-   :ClickUpTask status Testing javascript - Set to Testing status with JavaScript detection
-
-4. ClickUp-specific commands (backward compatibility):
-   :ClickupTaskXref     - Cross-reference bugs with file locations
-   :ClickUpCleanupSourceFiles - Clean up SourceFiles custom fields
-   :ClickUpClearResults - Clear XRef results
 
 Supported Comment Formats:
 

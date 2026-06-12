@@ -29,12 +29,6 @@ require("comment-tasks").setup({
             api_key_env = "GITHUB_TOKEN",
             repo_owner = "username",     -- Required: GitHub username or organization
             repo_name = "repository",    -- Required: Repository name
-            
-            -- Optional: Default labels for new issues
-            default_labels = {"bug", "enhancement"},
-            
-            -- Optional: Default assignee (GitHub username)
-            default_assignee = "username",
         }
     }
 })
@@ -104,49 +98,14 @@ github = {
 }
 ```
 
-### Advanced Configuration
+### Custom Environment Variable
 
 ```lua
 github = {
     enabled = true,
-    api_key_env = "GITHUB_TOKEN",
+    api_key_env = "MY_GITHUB_TOKEN",   -- Use a different env var name
     repo_owner = "your-organization",
     repo_name = "your-repository",
-    
-    -- Optional: Default labels for new issues
-    default_labels = {
-        "todo",           -- For TODO comments
-        "bug",            -- For FIXME comments  
-        "enhancement",    -- For FEATURE comments
-    },
-    
-    -- Optional: Default assignee
-    default_assignee = "developer-username",
-    
-    -- Optional: Default milestone ID
-    default_milestone = 1,
-    
-    -- Optional: Issue template
-    issue_template = {
-        body_prefix = "## Description\\n",
-        body_suffix = "\\n## Acceptance Criteria\\n- [ ] Code implemented\\n- [ ] Tests written\\n- [ ] Documentation updated"
-    }
-}
-```
-
-### Labels and Context
-
-The plugin can automatically add appropriate labels based on comment context:
-
-```lua
--- Configuration
-github = {
-    auto_labels = {
-        TODO = {"enhancement", "todo"},
-        FIXME = {"bug", "urgent"},
-        HACK = {"technical-debt", "refactor"},
-        NOTE = {"documentation"}
-    }
 }
 ```
 
@@ -200,42 +159,16 @@ GitHub Issues uses the [GitHub REST API v3](https://docs.github.com/en/rest/issu
 
 ## Multiple Repositories
 
-To work with multiple repositories, set up separate configurations:
+To target a different repository per project, place a `.comment-tasks.json`
+file at each project's root — `repo_owner` and `repo_name` are overridable
+there:
 
-```lua
-github_frontend = {
-    enabled = true,
-    api_key_env = "GITHUB_TOKEN", 
-    repo_owner = "company",
-    repo_name = "frontend-app",
-},
-
-github_backend = {
-    enabled = true,
-    api_key_env = "GITHUB_TOKEN",
-    repo_owner = "company", 
-    repo_name = "backend-api",
+```json
+{
+    "providers": {
+        "github": { "repo_owner": "company", "repo_name": "frontend-app" }
+    }
 }
 ```
 
-For more examples, see [../examples/workflows.md](../examples/workflows.md#github-workflows).
-## Multiple Repositories
-
-To work with multiple repositories, set up separate configurations:
-
-```lua
--- You can configure different providers for different projects
-github_frontend = {
-    enabled = true,
-    api_key_env = "GITHUB_TOKEN", 
-    repo_owner = "company",
-    repo_name = "frontend-app",
-},
-
-github_backend = {
-    enabled = true,
-    api_key_env = "GITHUB_TOKEN",
-    repo_owner = "company", 
-    repo_name = "backend-api",
-}
-```
+See the [Configuration Reference](../configuration.md#project-level-configuration-comment-tasksjson) for details.

@@ -2,6 +2,9 @@
 
 A universal Neovim plugin that bridges **10+ task management systems** with code comments across multiple programming languages. Create, update, and manage tasks directly from your comments without leaving your editor.
 
+> 📖 Rendered documentation:
+> [docs.georgeharker.com/comment-tasks.nvim](https://docs.georgeharker.com/comment-tasks.nvim/)
+
 ## 🚀 Features
 
 > **Manage tasks from code without losing focus. Maintain task references in code.**
@@ -115,45 +118,33 @@ Update task status as you progress:
 ```vim
 " ClickUp (Full custom status support)
 :ClickUpTask              " Create task (default)
-:ClickUpTask create       " Create task (explicit)
+:ClickUpTask new          " Create task (explicit)
 :ClickUpTask in_progress  " Update to 'In Progress' status
+:ClickUpTask review       " Update to 'Code Review' status
 :ClickUpTask close        " Complete task (uses completed status)
 :ClickUpTask addfile      " Add current file to task
 
 " GitHub Issues (Basic support)
 :GitHubTask               " Create issue (default)
-:GitHubTask create        " Create issue (explicit)
+:GitHubTask new           " Create issue (explicit)
 :GitHubTask close         " Close issue
 :GitHubTask addfile       " Add file reference
 
-" Asana (Full custom status support)  
+" Asana (Full custom status support)
 :AsanaTask                " Create task (default)
-:AsanaTask create         " Create task (explicit)
+:AsanaTask new            " Create task (explicit)
 :AsanaTask blocked        " Update to 'Blocked' status
 :AsanaTask close          " Complete task
-:ClickUpTask review       " Update to 'Code Review' status
-:ClickUpTask completed    " Complete task
-:ClickUpTask addfile      " Add current file to task
-
-" GitHub Issues (Basic support)
-:GitHubTask new          " Create issue
-:GitHubTask close        " Close issue  
-:GitHubTask addfile      " Add file reference
-
-" Asana (Full custom status support)  
-:AsanaTask new           " Create task
-:AsanaTask blocked       " Update to 'Blocked' status
-:AsanaTask completed     " Complete task
 ```
 
 ### Generic Commands (Uses default_provider)
 
 ```vim
-:CommentTask new         " Create task with default provider
-:CommentTask completed   " Complete task with default provider
 :CommentTask             " Create task with default provider (default)
-:CommentTask create      " Create task with default provider (explicit)
+:CommentTask new         " Create task with default provider (explicit)
 :CommentTask close       " Complete task with default provider
+:CommentTask addfile     " Add file reference with default provider
+:CommentTaskClose        " Complete task with default provider
 :CommentTaskAddFile      " Add file reference with default provider
 ```
 
@@ -258,8 +249,6 @@ require("comment-tasks").setup({
 - 🦊 **[GitLab Issues Setup](docs/providers/gitlab.md)**
 - ✅ **[Todoist Setup](docs/providers/todoist.md)**
 
-### Examples
-
 ### Reference
 - 🔧 **[API Reference](docs/api-reference.md)** - Lua API & keybinding examples
 
@@ -309,10 +298,10 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Support
 
-- 📖 **Documentation**: Check [docs/](docs/) for detailed guides
+- 📖 **Documentation**: Check the [Installation Guide](docs/installation.md) and [Configuration Reference](docs/configuration.md) for detailed guides
 - 🐛 **Issues**: Report bugs on [GitHub Issues](https://github.com/georgeharker/comment-tasks.nvim/issues)
 - 💬 **Discussions**: Ask questions in [GitHub Discussions](https://github.com/georgeharker/comment-tasks.nvim/discussions)
 
 ---
 
-**Ready to get started?** Check out the [Installation Guide](docs/installation.md) and choose your [provider setup](docs/providers/).
+**Ready to get started?** Check out the [Installation Guide](docs/installation.md) and choose your [provider setup](#provider-guides).

@@ -1,2 +1,8 @@
 /lua/.DS_Store
 /.codecompanion
+
+# Quarto site build (gh-quarto-publish)
+/_site/
+/.quarto/
+**/*.quarto_ipynb
+_quarto-deploy.yml

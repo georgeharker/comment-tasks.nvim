@@ -2,6 +2,7 @@
 
 local interface = require("comment-tasks.providers.interface")
 local http = require("comment-tasks.core.http")
+local config = require("comment-tasks.core.config")
 
 ---@type Provider
 local Provider = interface.Provider
@@ -102,6 +103,10 @@ function TodoistProvider:update_task_status(task_id, status, callback)
         callback(nil, error)
         return
     end
+
+    -- Resolve logical status keys (e.g. "completed" from :CommentTask close)
+    -- through the configured status map, like every other provider.
+    status = config.get_provider_status("todoist", status)
 
     -- Todoist only supports close operation
     if status ~= "complete" and status ~= "closed" then

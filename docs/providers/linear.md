@@ -34,11 +34,14 @@ require("comment-tasks").setup({
                 cancelled = "Canceled",         -- Custom status
             },
             
-            -- Optional: Default labels for new issues
-            default_labels = {"bug", "feature"},
+            -- Optional: Specific project
+            project_id = "project_id",
             
             -- Optional: Default assignee ID
-            default_assignee = "user_id",
+            assignee_id = "user_id",
+            
+            -- Optional: Default priority (0=none, 1=urgent, 2=high, 3=medium, 4=low)
+            priority = 0,
         }
     }
 })
@@ -137,23 +140,15 @@ linear = {
     statuses = {
         new = "Backlog",
         completed = "Done",
-        -- Add your custom statuses here
+        -- Add your custom statuses here.
+        -- Status values are resolved by name; use a # prefix for a
+        -- direct Linear state ID, e.g. blocked = "#state_12345".
     },
     
     -- Optional: Default issue configuration
-    default_labels = ["bug", "enhancement", "technical-debt"],
-    default_assignee = "user_id_here",
-    default_priority = 2,        -- 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low
-    
-    -- Optional: Project and cycle assignment
-    default_project = "project_id",
-    default_cycle = "cycle_id",
-    
-    -- Optional: Issue template
-    issue_template = {
-        description_prefix = "## Problem\\n",
-        description_suffix = "\\n## Solution\\n\\n## Acceptance Criteria\\n- [ ] "
-    }
+    assignee_id = "user_id_here",
+    priority = 2,                -- 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low
+    project_id = "project_id",   -- Optional: specific project
 }
 ```
 
@@ -216,37 +211,15 @@ Linear uses [GraphQL API](https://developers.linear.app/docs/graphql/working-wit
 
 ### Multi-Team Setup
 
-Configure different teams for different projects:
+To target a different Linear team per repository, use a `.comment-tasks.json`
+file at the project root — `team_id` and `project_id` are overridable there
+(see the
+[Configuration Reference](../configuration.md#project-level-configuration-comment-tasksjson)):
 
-```lua
-linear_frontend = {
-    enabled = true,
-    api_key_env = "LINEAR_API_KEY",
-    team_id = "frontend_team_id", 
-    statuses = { /* frontend workflow */ }
-}
-
-linear_backend = {
-    enabled = true,
-    api_key_env = "LINEAR_API_KEY",
-    team_id = "backend_team_id",
-    statuses = { /* backend workflow */ }
-}
-```
-
-### Label Automation
-
-Automatically assign labels based on context:
-
-```lua
-linear = {
-    auto_labels = {
-        TODO = ["enhancement"],
-        FIXME = ["bug", "urgent"],
-        HACK = ["technical-debt"],
-        PERF = ["performance", "optimization"]
+```json
+{
+    "providers": {
+        "linear": { "team_id": "frontend_team_id" }
     }
 }
 ```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#linear-workflows).

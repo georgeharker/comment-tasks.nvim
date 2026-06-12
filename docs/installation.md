@@ -7,9 +7,6 @@
 ```lua
 {
     "georgeharker/comment-tasks.nvim",
-    dependencies = {
-        "nvim-lua/plenary.nvim", -- Required for HTTP requests
-    },
     config = function()
         require("comment-tasks").setup({
             default_provider = "clickup", -- Choose your preferred provider
@@ -43,9 +40,6 @@
 ```lua
 use {
     "georgeharker/comment-tasks.nvim",
-    requires = {
-        "nvim-lua/plenary.nvim", -- Required for HTTP requests
-    },
     config = function()
         require("comment-tasks").setup({
             -- Your configuration here
@@ -57,7 +51,6 @@ use {
 ### Using [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```vim
-Plug 'nvim-lua/plenary.nvim'
 Plug 'georgeharker/comment-tasks.nvim'
 ```
 
@@ -72,7 +65,7 @@ require("comment-tasks").setup({
 ## Dependencies
 
 ### Required
-- **[plenary.nvim](https://github.com/nvim-lua/plenary.nvim)** - Essential for HTTP requests and async operations
+- **curl** - HTTP requests are made by spawning the system `curl` binary via `vim.system()`; no external Lua dependencies are needed
 
 ### Optional
 - **Tree-sitter parsers** - For enhanced comment detection (automatically installed by most Neovim distributions)
@@ -89,29 +82,26 @@ export CLICKUP_API_KEY="your_api_key_here"
 export GITHUB_TOKEN="your_personal_access_token"
 
 # Asana
-export ASANA_TOKEN="your_personal_access_token"
+export ASANA_ACCESS_TOKEN="your_personal_access_token"
 
 # Linear
 export LINEAR_API_KEY="your_api_key_here"
 
-# Jira
-export JIRA_URL="https://your-domain.atlassian.net"
-export JIRA_USERNAME="your_email@domain.com"
+# Jira (the instance URL is set via the server_url config option)
 export JIRA_API_TOKEN="your_api_token"
 
 # Notion
-export NOTION_TOKEN="your_integration_token"
+export NOTION_API_KEY="your_integration_token"
 
 # Monday.com
 export MONDAY_API_TOKEN="your_api_token"
 
 # Trello
 export TRELLO_API_KEY="your_api_key"
-export TRELLO_TOKEN="your_token"
+export TRELLO_API_TOKEN="your_token"
 
-# GitLab
+# GitLab (a self-hosted instance URL is set via the gitlab_url config option)
 export GITLAB_TOKEN="your_personal_access_token"
-export GITLAB_URL="https://gitlab.com" # or your GitLab instance URL
 
 # Todoist
 export TODOIST_API_TOKEN="your_api_token"
@@ -139,6 +129,6 @@ After installation, verify everything works:
 ## Next Steps
 
 - **Configuration**: See [configuration.md](configuration.md) for detailed setup options
-- **Provider Setup**: Visit [providers/](providers/) for specific provider configuration
+- **Provider Setup**: See the provider guides for specific provider configuration, e.g. [ClickUp](providers/clickup.md), [GitHub](providers/github.md), [Jira](providers/jira.md)
 - **Keybindings**: Check [api-reference.md](api-reference.md) for keybinding examples
-- **Quick Start**: Return to main [README.md](../README.md#quick-start) for usage examples
+- **Quick Start**: Return to main [README.md](../README.md#-quick-start) for usage examples

@@ -143,19 +143,6 @@ asana = {
         completed = "Complete",
         -- Add your custom statuses here
     },
-    
-    -- Optional: Default task configuration
-    task_defaults = {
-        notes = "Created from code comment via comment-tasks.nvim",
-        due_on = nil,  -- Set default due date (YYYY-MM-DD format)
-    },
-    
-    -- Optional: Custom field mapping
-    custom_fields = {
-        priority = "Priority",      -- Custom field name for priority
-        component = "Component",    -- Custom field name for component
-        story_points = "Story Points", -- Custom field name for estimation
-    }
 }
 ```
 
@@ -208,41 +195,12 @@ Asana uses the [Asana API v1.0](https://developers.asana.com/docs/overview). The
 
 1. **Project organization**: Use dedicated projects for development tasks
 2. **Status mapping**: Align plugin statuses with your team's workflow
-3. **Assignee management**: Set up default assignees for consistency
+3. **Assignee management**: Set `assignee_gid` so new tasks are assigned consistently
 4. **File references**: Use `:addfile` to maintain code traceability
-5. **Due dates**: Consider setting default due dates for planning
 
 ## Team Workflows
 
-### Multi-Developer Setup
-
-Configure different assignees for different developers:
-
-```lua
-asana = {
-    project_gid = "shared_project_gid",
-    assignee_gid = "developer_a_gid",
-    statuses = { /* shared statuses */ }
-}
-
-asana = {
-    project_gid = "shared_project_gid", 
-    assignee_gid = "developer_b_gid",
-    statuses = { /* shared statuses */ }
-}
-```
-
-### Custom Field Integration
-
-Map Asana custom fields to enhance task metadata:
-
-```lua
-custom_fields = {
-    priority = "Priority",           -- Maps to Asana Priority field
-    component = "Component",         -- Maps to Component field  
-    story_points = "Story Points",   -- Maps to estimation field
-    tech_debt = "Technical Debt",    -- Maps to debt tracking field
-}
-```
-
-For more examples, see [../examples/workflows.md](../examples/workflows.md#asana-workflows).
+Each developer sets their own `assignee_gid` in their personal Neovim config;
+the shared project can be targeted per-repository with a `.comment-tasks.json`
+file (`project_gid` and `assignee_gid` are overridable there — see the
+[Configuration Reference](../configuration.md#project-level-configuration-comment-tasksjson)).

@@ -1,0 +1,32 @@
+# Thin caller for gh-quarto-publish: deploy docs when they change on a branch.
+name: docs (branch push)
+
+on:
+  workflow_dispatch:   # manual run: deploys the selected branch to its prefix
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - "index.md"
+      - "_quarto.yml"
+      - ".github/workflows/docs-on-change.yml"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Inert until the deploy vars/secrets are configured on the repo.
+    if: ${{ vars.DOCS_SSH_DEST != '' }}
+    uses: georgeharker/gh-quarto-publish/.github/workflows/publish.yml@main
+    with:
+      target-prefix: ${{ github.ref_name }}
+      ssh-dest: ${{ vars.DOCS_SSH_DEST }}
+      site-url: ${{ vars.DOCS_SITE_URL }}
+    secrets:
+      deploy-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+      host-key: ${{ secrets.DOCS_HOST_KEY }}
